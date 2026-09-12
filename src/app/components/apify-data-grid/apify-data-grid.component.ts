@@ -31,14 +31,13 @@ export class ApifyDataGridComponent {
   // ==========================================
 
   getAuthorName(item: any): string {
-    return item.channelName || item.pageName || item.authorMeta?.name || item.ownerUsername || item.user?.name || 'Competidor';
+    // Agregamos ownerFullName como prioridad para Instagram
+    return item.ownerFullName || item.channelName || item.pageName || item.authorMeta?.name || item.ownerUsername || item.user?.name || 'Competidor';
   }
 
   getMediaThumbnail(item: any): string | null {
     if (this.network === 'youtube') {
-      // Priorizamos la URL de miniatura directa que devuelve Apify si existe
       if (item.thumbnailUrl) return item.thumbnailUrl;
-      // Fallback a extraerla del ID del video
       const id = this.getYouTubeId(item.url);
       return id ? `https://img.youtube.com/vi/${id}/maxresdefault.jpg` : null;
     }
@@ -54,22 +53,24 @@ export class ApifyDataGridComponent {
     }
 
     if (this.network === 'instagram') {
+      // Instagram siempre entrega displayUrl como la mejor resolución de la portada
       return item.displayUrl || item.thumbnailUrl || item.imageUrl || null;
     }
 
     if (this.network === 'tiktok') {
-      return item.videoMeta?.coverUrl || item.imageUrl || null;
+      return item.videoMeta?.coverUrl || item.authorMeta?.avatar || item.imageUrl || null;
     }
 
     return null;
   }
 
   getPostTitle(item: any): string {
+    // Priorizamos 'caption' que es el estándar en Instagram
+    if (item.caption) return item.caption;
     if (item.title) return item.title;
     if (item.text) return item.text;
-    if (item.caption) return item.caption;
 
-    // Edge case de privacidad en Facebook
+    // Edge case Facebook
     if (this.network === 'facebook' && item.media && item.media.length > 0) {
       const firstMedia = item.media[0];
       const errorText = firstMedia.title_with_entities?.text || '';
@@ -82,10 +83,33 @@ export class ApifyDataGridComponent {
   }
 
   getPostDate(item: any): Date {
-    const rawDate = item.time || item.date || item.timestamp || item.createdAt;
+    const rawDate = item.timestamp || item.time || item.date || item.createTimeISO || item.createdAt;
+    if (item.createTime && typeof item.createTime === 'number') {
+       return new Date(item.createTime * 1000);
+    }
     if (typeof rawDate === 'number' && rawDate < 10000000000) {
       return new Date(rawDate * 1000);
     }
     return rawDate ? new Date(rawDate) : new Date();
+  }
+
+  /**
+   * NUEVO: Formateador unificado de duración para YouTube, TikTok e Instagram Reels
+   */
+  getFormattedDuration(item: any): string | null {
+    if (this.network === 'youtube' && item.duration) return item.duration;
+
+    let seconds = 0;
+    if (this.network === 'tiktok' && item.videoMeta?.duration) {
+      seconds = item.videoMeta.duration; // TikTok envía segundos enteros
+    } else if (this.network === 'instagram' && item.videoDuration) {
+      seconds = Math.round(item.videoDuration); // Instagram envía decimales (ej. 41.27)
+    } else {
+      return null;
+    }
+
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   }
 }

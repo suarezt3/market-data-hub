@@ -38,17 +38,16 @@
 
     @if (actionType() === 'run') {
       <div class="fade-in" style="display: flex; flex-direction: column; gap: 1.5rem;">
+
         <div class="control-group">
           <label>3. URLs de los Competidores</label>
           <textarea
             [(ngModel)]="targetUrlsInput"
-            rows="5"
+            rows="4"
             placeholder="Ingresa una URL por línea..."
             class="form-input"
             style="resize: vertical;"></textarea>
-          <small style="color: #6b7280; font-size: 0.75rem; margin-top: 0.25rem;">
-            Pega un enlace por línea. Se procesarán en paralelo.
-          </small>
+          <small class="help-text">Se procesarán en paralelo.</small>
         </div>
 
         <div class="control-group">
@@ -60,8 +59,19 @@
           </select>
         </div>
 
+        <div class="control-group date-range-group">
+          <div class="date-input-wrapper">
+            <label>Fecha Inicio (Opcional)</label>
+            <input type="date" [(ngModel)]="startDate" class="form-input">
+          </div>
+          <div class="date-input-wrapper">
+            <label>Fecha Fin (Opcional)</label>
+            <input type="date" [(ngModel)]="endDate" class="form-input">
+          </div>
+        </div>
+
         <div class="control-group">
-          <label>5. Límite de Resultados por URL</label>
+          <label>6. Límite de Resultados por URL</label>
           <input type="number" [(ngModel)]="resultsLimit" min="1" max="1000" class="form-input">
         </div>
       </div>
@@ -69,13 +79,27 @@
 
     <button (click)="fetchData()" [disabled]="isLoading()" class="btn-primary btn-block" style="margin-top: 1.5rem;">
       @if (isLoading()) {
-        <span>Procesando...</span>
+        <span class="spinner-small"></span> Procesando...
       } @else if (actionType() === 'list-runs') {
         <span>Cargar Historiales</span>
       } @else {
-        <span>Ejecutar Consulta</span>
+        <span>Ejecutar Consulta Individual</span>
       }
     </button>
+
+    <!-- NUEVO: SEPARADOR Y BOTÓN OMNICANAL -->
+    <hr style="border: 0; border-top: 1px dashed #e5e7eb; margin: 1rem 0;">
+    <button (click)="fetchOmnichannelData()" [disabled]="isLoading()" class="btn-block"
+            style="background-color: #111827; color: white; padding: 0.75rem 1rem; border-radius: 0.5rem; border: none; font-weight: 600; font-size: 0.875rem; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 0.5rem; transition: transform 0.1s ease;">
+      @if (isLoading()) {
+        <span class="spinner-small"></span> Consolidando...
+      } @else {
+        <span>🌐 Visión Ecosistema (Omnicanal)</span>
+      }
+    </button>
+    <small class="help-text" style="text-align: center; display: block; margin-top: 0.5rem;">
+      Cruza el último historial de todas las plataformas.
+    </small>
   </aside>
 
   <!-- ÁREA PRINCIPAL (RESULTADOS) -->
@@ -88,15 +112,15 @@
     @if (isLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
-        <p>Comunicándose con Supabase y Apify. Por favor espera...</p>
+        <p>Procesando inteligencia de mercado. Por favor espera...</p>
       </div>
     }
 
     <!-- TABLA DE HISTORIALES -->
     @if (!isLoading() && !error() && runsList().length > 0) {
       <div class="results-header fade-in">
-        <h3>Historial de Ejecuciones (Top 15)</h3>
-        <p>Haz clic en cualquier ejecución exitosa para cargar los datos en el dashboard sin consumir créditos.</p>
+        <h3>Historial de Ejecuciones</h3>
+        <p>Selecciona una ejecución previa para analizar los datos sin consumir créditos.</p>
       </div>
       <app-apify-runs-table
         [runsList]="runsList()"
@@ -107,71 +131,95 @@
     <!-- ÁREA DE DASHBOARD Y GRÁFICAS -->
     @if (!isLoading() && !error() && data().length > 0) {
 
-      <!-- HEADER CON BRANDING DINÁMICO -->
-      <div class="results-header fade-in" style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; margin-bottom: 2rem;">
+      <div class="results-header fade-in enterprise-header">
         <div>
-          <h3 style="display: flex; align-items: center; gap: 0.5rem;">
-            <!-- Icono dinámico según la red -->
-            <span style="font-size: 1.5rem;">
-              {{ selectedNetwork() === 'tiktok' ? '🎵' : selectedNetwork() === 'instagram' ? '📸' : selectedNetwork() === 'youtube' ? '▶️' : '👍' }}
+          <h3 class="network-title">
+            <span class="network-icon">
+              <!-- Renderizamos el icono global para el caso Omnicanal -->
+              {{ loadedNetwork() === 'omnicanal' ? '🌐' : loadedNetwork() === 'tiktok' ? '🎵' : loadedNetwork() === 'instagram' ? '📸' : loadedNetwork() === 'youtube' ? '▶️' : '👍' }}
             </span>
-            Insights de Mercado en {{ selectedNetwork() | titlecase }}
+            {{ loadedNetwork() === 'omnicanal' ? 'Visión Consolidada del Ecosistema Digital' : 'Insights de Mercado en ' + (loadedNetwork() | titlecase) }}
           </h3>
-          <p>Se consolidaron {{ data().length }} registros en total para el análisis.</p>
+          <p class="subtitle">
+            Se consolidaron <strong>{{ data().length }} registros</strong>.
+            @if (dynamicDateRange()) {
+              <span class="date-badge">
+                🗓️ Temporalidad: {{ dynamicDateRange() }}
+              </span>
+            }
+          </p>
         </div>
       </div>
 
-      <!-- NUEVO: PANEL DE FILTROS INTERACTIVOS -->
-      <div class="filters-panel fade-in" style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
-        <button
-          class="filter-pill"
-          [class.active]="selectedMetric() === 'total'"
-          (click)="applyFilter('total')">
-          📈 Engagement Total
-        </button>
-        <button
-          class="filter-pill"
-          [class.active]="selectedMetric() === 'views'"
-          (click)="applyFilter('views')">
-          👁️ Vistas / Reproducciones
-        </button>
-        <button
-          class="filter-pill"
-          [class.active]="selectedMetric() === 'likes'"
-          (click)="applyFilter('likes')">
-          ❤️ Me Gusta
-        </button>
-        <button
-          class="filter-pill"
-          [class.active]="selectedMetric() === 'comments'"
-          (click)="applyFilter('comments')">
-          💬 Comentarios
-        </button>
+      <div class="filters-panel fade-in">
+        <button class="filter-pill" [class.active]="selectedMetric() === 'total'" (click)="applyFilter('total')">📈 Engagement Total</button>
+        <button class="filter-pill" [class.active]="selectedMetric() === 'views'" (click)="applyFilter('views')">👁️ Vistas / Reproducciones</button>
+        <button class="filter-pill" [class.active]="selectedMetric() === 'likes'" (click)="applyFilter('likes')">❤️ Me Gusta</button>
+        <button class="filter-pill" [class.active]="selectedMetric() === 'comments'" (click)="applyFilter('comments')">💬 Comentarios</button>
       </div>
 
-      <!-- Layout CSS Grid para gráficas -->
-      <div class="charts-grid fade-in" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
+      <div class="charts-grid fade-in">
 
+        <!-- 1. Cuota de mercado global -->
         @if (marketShareChartOptions()) {
-          <div class="chart-card" style="height: 450px; background: #ffffff; padding: 1.5rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <div class="chart-card">
             <div echarts [options]="marketShareChartOptions()!" style="height: 100%; width: 100%;"></div>
           </div>
         }
 
+        <!-- 2. Tarjetas de Competidores (Kpis) -->
+        @if (competitorsKpi().length > 0) {
+          <div class="chart-card kpi-container" style="display: flex; flex-direction: column; gap: 1rem; overflow-y: auto;">
+            <div style="margin-bottom: 0.5rem;">
+              <h4 style="margin: 0; font-size: 1.1rem; color: #111827;">Comunidad de Marca</h4>
+              <p style="margin: 0; font-size: 0.85rem; color: #6b7280;">Volumen de seguidores consolidado</p>
+            </div>
+
+            @for (comp of competitorsKpi(); track comp.name) {
+              <div class="kpi-card" style="display: flex; align-items: center; gap: 1rem; padding: 1rem; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 0.5rem; transition: transform 0.2s ease;">
+
+                @if (comp.avatar) {
+                  <img [src]="comp.avatar" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" alt="Logo">
+                } @else {
+                  <div style="width: 48px; height: 48px; border-radius: 50%; background: #e0e7ff; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #4338ca; font-weight: bold;">
+                    {{ comp.name.charAt(0) | uppercase }}
+                  </div>
+                }
+
+                <div style="flex: 1;">
+                  <div style="font-weight: 700; color: #374151; font-size: 0.95rem; line-height: 1.2;">{{ comp.name }}</div>
+                  <div style="color: #6366f1; font-weight: 800; font-size: 1.15rem; margin-top: 0.1rem;">{{ comp.followers | number }} <span style="font-size: 0.75rem; font-weight: 600; color: #6b7280;">seguidores</span></div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- 3. NUEVO: MASTER GRAPH OMNICANAL -->
+        @if (masterChartOptions()) {
+          <div class="chart-card" style="grid-column: 1 / -1; height: 450px;">
+            <div echarts [options]="masterChartOptions()!" style="height: 100%; width: 100%;"></div>
+          </div>
+        }
+
+        <!-- 4. Evolución en el tiempo (Aparece solo en vistas individuales) -->
         @if (chartOptions()) {
-          <div class="chart-card" style="height: 450px; background: #ffffff; padding: 1.5rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <div class="chart-card" style="grid-column: 1 / -1; height: 450px;">
             <div echarts [options]="chartOptions()!" style="height: 100%; width: 100%;"></div>
           </div>
         }
 
+        <!-- 5. Cuadrante de Rendimiento (Aparece solo en vistas individuales) -->
+        @if (performanceChartOptions()) {
+          <div class="chart-card" style="grid-column: 1 / -1; height: 500px;">
+            <div echarts [options]="performanceChartOptions()!" style="height: 100%; width: 100%;"></div>
+          </div>
+        }
       </div>
 
-      <h4 style="margin-bottom: 1rem; color: #374151;">Desglose de Contenido Extraído</h4>
+      <h4 class="section-title fade-in">Desglose de Contenido Extraído</h4>
       <div class="fade-in">
-        <app-apify-data-grid
-          [data]="data()"
-          [network]="selectedNetwork()">
-        </app-apify-data-grid>
+        <app-apify-data-grid [data]="data()" [network]="loadedNetwork()"></app-apify-data-grid>
       </div>
     }
 
@@ -179,8 +227,8 @@
     @if (!isLoading() && !error() && data().length === 0 && runsList().length === 0) {
       <div class="empty-state fade-in">
         <div class="empty-icon">📊</div>
-        <h3>Panel de Control Listo</h3>
-        <p>Selecciona una red social, elige el origen de datos en el menú izquierdo y haz clic en el botón de acción para comenzar.</p>
+        <h3>Centro de Inteligencia Competitiva</h3>
+        <p>Configura los parámetros en el panel lateral para generar el dashboard.</p>
       </div>
     }
   </main>

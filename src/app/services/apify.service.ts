@@ -1,8 +1,8 @@
 // src/app/services/apify.service.ts
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { Observable, throwError, forkJoin, of } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
 
 export type ApifyAction = 'run' | 'get-latest' | 'list-runs' | 'get-run-data';
 
@@ -57,4 +57,41 @@ export class ApifyService {
     console.error('[ApifyService Error]:', errorMessage);
     return throwError(() => new Error(errorMessage));
   }
+
+  // ==========================================
+  // NUEVO: CARGA OMNICANAL EN PARALELO (MASTER GRAPH)
+  // ==========================================
+  getOmnichannelLatestData(): Observable<any[]> {
+    const actors = [
+      { net: 'facebook', id: 'apify/facebook-posts-scraper' },
+      { net: 'instagram', id: 'apify/instagram-scraper' },
+      { net: 'tiktok', id: 'clockworks/tiktok-scraper' },
+      { net: 'youtube', id: 'streamers/youtube-scraper' }
+    ];
+
+    // Creamos un array de peticiones HTTP (Observables)
+    const requests = actors.map(actor =>
+      this.executeScraper({ action: 'get-latest', actorId: actor.id }).pipe(
+        map(response => {
+          if (response.success && Array.isArray(response.data)) {
+            // Etiquetamos cada registro con su red de origen para el Master Graph
+            return response.data.map(item => ({ ...item, __network: actor.net }));
+          }
+          return [];
+        }),
+        catchError(err => {
+          // Resiliencia: Si un scraper falla, devolvemos un array vacío para esa red
+          // y evitamos que el forkJoin completo colapse.
+          console.error(`[ApifyService] Error cargando data de ${actor.net}:`, err);
+          return of([]);
+        })
+      )
+    );
+
+    // forkJoin ejecuta las 4 peticiones al mismo tiempo
+    return forkJoin(requests).pipe(
+      map(results => results.flat()) // Combina los 4 arrays resultantes en un megadataset
+    );
+  }
 }
+

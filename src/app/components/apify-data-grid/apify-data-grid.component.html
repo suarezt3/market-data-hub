@@ -1,9 +1,14 @@
 <!-- src/app/components/apify-data-grid/apify-data-grid.component.html -->
 <div class="grid-container">
-  @for (item of data; track item.url || $index) {
+  @for (item of data; track item.id || item.url || item.webVideoUrl || $index) {
+    <!-- Usamos @let para definir la red específica de este item.
+         Si estamos en modo 'omnicanal', tomamos la propiedad inyectada __network.
+         De lo contrario, usamos la red seleccionada globalmente. -->
+    @let itemNetwork = network === 'omnicanal' ? (item.__network || 'unknown') : network;
+
     <article class="media-card fade-in">
 
-      <!-- 1. HEADER: Miniatura Dinámica a través del Adapter -->
+      <!-- 1. HEADER: Miniatura Dinámica y Duración Unificada -->
       <div class="card-header">
         @if (getMediaThumbnail(item)) {
           <img [src]="getMediaThumbnail(item)"
@@ -11,20 +16,27 @@
                class="thumbnail"
                (error)="handleImageError($event, getYouTubeId(item.url))">
 
-          <!-- Insignia condicional: si es YouTube muestra duración, si es video de FB muestra icono -->
-          @if (network === 'youtube') {
-            <span class="duration-badge">{{ item.duration || '00:00' }}</span>
-          } @else if (item.isVideo) {
+          <!-- Insignia de duración inteligente -->
+          @if (getFormattedDuration(item)) {
+            <span class="duration-badge">{{ getFormattedDuration(item) }}</span>
+          } @else if (item.isVideo || item.type === 'Video' || item.type === 'clips') {
             <span class="duration-badge">▶ Video</span>
           }
         } @else {
           <!-- Fallback elegante -->
           <div class="placeholder-thumbnail">
             <span class="network-icon">
-              {{ network === 'tiktok' ? '🎵' : network === 'instagram' ? '📸' : network === 'facebook' ? '👍' : '📊' }}
+              {{ itemNetwork === 'tiktok' ? '🎵' : itemNetwork === 'instagram' ? '📸' : itemNetwork === 'youtube' ? '▶️' : itemNetwork === 'facebook' ? '👍' : '📊' }}
             </span>
-            <span>{{ network | titlecase }} Content</span>
+            <span>{{ itemNetwork | titlecase }} Content</span>
           </div>
+        }
+
+        <!-- NUEVO: Etiqueta de plataforma en modo Omnicanal -->
+        @if (network === 'omnicanal') {
+           <div class="omnichannel-badge" [ngClass]="itemNetwork">
+             {{ itemNetwork === 'tiktok' ? '🎵 TikTok' : itemNetwork === 'instagram' ? '📸 Instagram' : itemNetwork === 'youtube' ? '▶️ YouTube' : '👍 Facebook' }}
+           </div>
         }
       </div>
 
@@ -45,25 +57,32 @@
       <!-- 3. FOOTER: Métricas Clave Dinámicas por Red Social -->
       <div class="card-footer">
         <div class="metrics">
-          @if (network === 'youtube') {
+          @if (itemNetwork === 'youtube') {
             <div class="metric" title="Vistas">👁️ {{ (item.viewCount || 0) | number }}</div>
             <div class="metric" title="Likes">❤️ {{ (item.likes || 0) | number }}</div>
-          } @else if (network === 'tiktok') {
+          } @else if (itemNetwork === 'tiktok') {
             <div class="metric" title="Reproducciones">▶️ {{ (item.playCount || 0) | number }}</div>
+            <div class="metric" title="Likes">❤️ {{ (item.diggCount || 0) | number }}</div>
+            <div class="metric" title="Comentarios">💬 {{ (item.commentCount || 0) | number }}</div>
             <div class="metric" title="Compartidos">↪️ {{ (item.shareCount || 0) | number }}</div>
-          } @else if (network === 'facebook') {
-            <!-- Nivel Enterprise: Desglose específico de engagement en Facebook -->
+          } @else if (itemNetwork === 'facebook') {
             <div class="metric" title="Likes">👍 {{ (item.likes || item.reactionLikeCount || 0) | number }}</div>
             <div class="metric" title="Comentarios">💬 {{ (item.comments || item.topComments?.length || 0) | number }}</div>
             <div class="metric" title="Compartidos">↪️ {{ (item.shares || 0) | number }}</div>
+          } @else if (itemNetwork === 'instagram') {
+            @if (item.videoPlayCount || item.videoViewCount) {
+              <div class="metric" title="Reproducciones">▶️ {{ (item.videoPlayCount || item.videoViewCount || 0) | number }}</div>
+            }
+            <div class="metric" title="Likes">❤️ {{ (item.likesCount || 0) | number }}</div>
+            <div class="metric" title="Comentarios">💬 {{ (item.commentsCount || 0) | number }}</div>
           } @else {
             <div class="metric" title="Interacciones">❤️ {{ (item.likesCount || item.likes || 0) | number }}</div>
             <div class="metric" title="Comentarios">💬 {{ (item.commentsCount || item.comments || 0) | number }}</div>
           }
         </div>
 
-        @if (item.url) {
-          <a [href]="item.url" target="_blank" rel="noopener noreferrer" class="btn-link">Ver Original</a>
+        @if (item.url || item.webVideoUrl) {
+          <a [href]="item.url || item.webVideoUrl" target="_blank" rel="noopener noreferrer" class="btn-link">Ver Original</a>
         }
       </div>
     </article>

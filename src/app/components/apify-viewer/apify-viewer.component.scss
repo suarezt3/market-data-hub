@@ -1,260 +1,364 @@
-// src/app/components/apify-viewer/apify-viewer.component.scss
+/* src/app/components/apify-viewer/apify-viewer.component.scss */
 
-// Contenedor principal de la aplicación (100% del alto de la pantalla)
-.dashboard-layout {
-  display: flex;
-  min-height: 100vh;
-  font-family: "Lato", -apple-system, sans-serif;
-  background-color: #f3f4f6; // Fondo gris ultra claro para contraste
-  color: #1f2937;
+$bg-main: #f3f4f6;
+$bg-panel: #ffffff;
+$text-primary: #111827;
+$text-secondary: #4b5563;
+$text-muted: #6b7280;
+$border-color: #e5e7eb;
+$primary-color: #6366f1;
+$primary-hover: #4f46e5;
+
+/* FIX: Asegura que el padding no expanda el ancho de los elementos */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-// ==========================================
-// 1. PANEL LATERAL (SIDEBAR)
-// ==========================================
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr; /* Ligeramente más ancho para que respire la UI */
+  min-height: 100vh;
+  background-color: $bg-main;
+  font-family: 'Lato', sans-serif;
+  color: $text-primary;
+}
+
+/* =========================================
+   PANEL LATERAL (SIDEBAR)
+========================================= */
 .sidebar-controls {
-  width: 320px;
-  min-width: 320px;
-  background-color: #ffffff;
-  border-right: 1px solid #e5e7eb;
-  padding: 2rem;
+  background-color: $bg-panel;
+  border-right: 1px solid $border-color;
+  padding: 2rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.03);
-  z-index: 10;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow-x: hidden; /* Evita scroll horizontal interno */
+  overflow-y: auto;
+  box-shadow: 1px 0 10px rgba(0, 0, 0, 0.03);
+
+  /* Estilizado sutil del scrollbar */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 4px;
+  }
 
   .brand-header {
-    border-bottom: 1px solid #e5e7eb;
-    padding-bottom: 1.5rem;
     margin-bottom: 0.5rem;
-
     h2 {
       font-size: 1.5rem;
-      font-weight: 700;
-      margin: 0 0 0.25rem;
-      color: #111827;
+      font-weight: 800;
+      color: $text-primary;
+      margin: 0 0 0.25rem 0;
+      letter-spacing: -0.025em;
     }
     p {
       font-size: 0.875rem;
-      color: #6b7280;
+      color: $text-muted;
       margin: 0;
     }
   }
 
-  // Estilos limpios para formularios
   .control-group {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    width: 100%;
 
     label {
-      font-weight: 600;
       font-size: 0.875rem;
-      color: #374151;
+      font-weight: 700;
+      color: $text-secondary;
     }
 
-    .form-input {
-      padding: 0.75rem;
-      border: 1px solid #d1d5db;
-      border-radius: 0.5rem;
-      font-size: 0.875rem;
-      width: 100%;
-      outline: none;
-      background-color: #f9fafb;
-      transition: all 0.2s ease;
-
-      &:focus {
-        border-color: #3ecf8e;
-        background-color: #ffffff;
-        box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.15);
-      }
+    .help-text {
+      color: $text-muted;
+      font-size: 0.75rem;
     }
   }
 
-  // Botones de radio personalizados
+  /* FIX: Distribución exacta al 50% para las fechas */
+  .date-range-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    width: 100%;
+
+    .date-input-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    color: $text-primary;
+    background-color: #fff;
+    transition: all 0.2s ease;
+
+    &:focus {
+      outline: none;
+      border-color: $primary-color;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+  }
+
+  /* NUEVO: Selector de Origen de Datos (Tarjetas interactivas) */
   .radio-group {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    background: #f9fafb;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    border: 1px solid #e5e7eb;
+    gap: 0.5rem;
 
     .radio-label {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      font-size: 0.875rem;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      border: 1px solid $border-color;
+      border-radius: 0.5rem;
+      background-color: #ffffff;
       cursor: pointer;
-      color: #4b5563;
-      transition: color 0.2s;
+      transition: all 0.2s ease;
+      font-size: 0.875rem;
+      color: $text-secondary;
 
-      &:hover { color: #111827; }
+      &:hover {
+        background-color: #f9fafb;
+        border-color: #d1d5db;
+      }
+
+      /* Estado Activo usando :has (CSS Moderno) */
+      &:has(input[type="radio"]:checked) {
+        background-color: #eef2ff;
+        border-color: $primary-color;
+        color: $primary-hover;
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(99, 102, 241, 0.05);
+      }
 
       input[type="radio"] {
-        accent-color: #3ecf8e;
+        accent-color: $primary-color;
         width: 1.1rem;
         height: 1.1rem;
+        margin: 0;
         cursor: pointer;
       }
     }
   }
 
-  .btn-block {
-    width: 100%;
-    margin-top: auto; // Empuja el botón hacia abajo si hay espacio
-  }
-}
+  .btn-primary {
+    background-color: $primary-color;
+    color: white;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    border: none;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
 
-// Botón de acción principal
-.btn-primary {
-  background-color: #3ecf8e;
-  color: #064e3b;
-  font-weight: 600;
-  padding: 0.875rem;
-  border: none;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 1rem;
-
-  &:hover:not(:disabled) {
-    background-color: #2fac77;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px -1px rgba(62, 207, 142, 0.3);
-  }
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    background-color: #d1d5db;
-    color: #6b7280;
-  }
-}
-
-// ==========================================
-// 2. ÁREA PRINCIPAL (RESULTADOS)
-// ==========================================
-.dashboard-content {
-  flex: 1;
-  padding: 2rem 3rem;
-  overflow-y: auto; // Permite scroll independiente del sidebar
-
-  .results-header {
-    margin-bottom: 2rem;
-    h3 {
-      font-size: 1.5rem;
-      color: #111827;
-      margin: 0 0 0.5rem;
+    &:hover:not(:disabled) {
+      background-color: $primary-hover;
+      transform: translateY(-1px);
     }
-    p {
-      color: #6b7280;
+
+    &:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+  }
+}
+
+/* =========================================
+   ÁREA PRINCIPAL (MAIN CONTENT)
+========================================= */
+.dashboard-content {
+  padding: 2.5rem 3rem;
+  overflow-y: auto;
+
+  .enterprise-header {
+    margin-bottom: 2rem;
+    border-bottom: 1px solid $border-color;
+    padding-bottom: 1.5rem;
+
+    .network-title {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: $text-primary;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 0 0 0.5rem 0;
+    }
+
+    .subtitle {
+      color: $text-muted;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
       margin: 0;
       font-size: 0.95rem;
+
+      strong {
+        color: $text-secondary;
+      }
+    }
+
+    .date-badge {
+      background: #e0e7ff;
+      color: #4338ca;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.025em;
     }
   }
 
-  .results-grid {
+  .section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: $text-primary;
+    margin: 0 0 1.5rem 0;
+  }
+
+  /* FILTROS TIPO PILL */
+  .filters-panel {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+
+    .filter-pill {
+      padding: 0.5rem 1.25rem;
+      border-radius: 9999px;
+      border: 1px solid $border-color;
+      background-color: $bg-panel;
+      color: $text-secondary;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+
+      &:hover {
+        background-color: #f9fafb;
+        border-color: #d1d5db;
+      }
+
+      &.active {
+        background-color: $primary-color;
+        color: white;
+        border-color: $primary-color;
+        box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3);
+      }
+    }
+  }
+
+  /* GRÁFICAS */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+
+    .chart-card {
+      background: $bg-panel;
+      padding: 1.5rem;
+      border-radius: 0.75rem;
+      border: 1px solid $border-color;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      height: 450px;
+      transition: box-shadow 0.3s ease;
+
+      &:hover {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+      }
+    }
+  }
+
+  /* UTILIDADES Y ESTADOS */
+  .fade-in {
+    animation: fadeIn 0.4s ease-in-out;
+  }
+
+  .loading-state, .empty-state {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  // Tarjetas para visualizar los datos actuales (JSON)
-  .data-card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
+    align-items: center;
+    justify-content: center;
+    padding: 5rem 2rem;
+    text-align: center;
+    background: $bg-panel;
     border-radius: 0.75rem;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    overflow-x: auto;
+    border: 1px dashed #d1d5db;
+    color: $text-secondary;
 
-    pre {
-      font-size: 0.85rem;
-      color: #1f2937;
-      margin: 0;
-      code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    h3 {
+      color: $text-primary;
+      margin-bottom: 0.5rem;
     }
   }
+
+  .alert-error {
+    background-color: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #f87171;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .spinner-small {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
 }
 
-// ==========================================
-// 3. UX: ESTADOS (CARGA, ERROR Y VACÍO)
-// ==========================================
-.alert-error {
-  background: #fef2f2;
-  color: #991b1b;
-  padding: 1.25rem;
-  border-radius: 0.5rem;
-  border-left: 4px solid #ef4444;
-  margin-bottom: 1.5rem;
-}
-
-.loading-state, .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 70vh;
-  color: #6b7280;
-  text-align: center;
-
-  h3 { color: #374151; margin-bottom: 0.5rem; }
-  p { max-width: 400px; margin: 0 auto; line-height: 1.5; }
-}
-
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  opacity: 0.9;
-}
-
-// Spinner nativo CSS
-.spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #e5e7eb;
-  border-top-color: #3ecf8e;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 1.5rem;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-// Animación de entrada suave para el campo URL
-.fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
-}
+/* KEYFRAMES */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
+  from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Estilos para el panel de filtros */
-.filter-pill {
-  padding: 0.5rem 1rem;
-  border-radius: 9999px;
-  border: 1px solid #d1d5db;
-  background-color: #f9fafb;
-  color: #4b5563;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
-  &:hover {
-    background-color: #e5e7eb;
+/* RESPONSIVE */
+@media (max-width: 1024px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
   }
-
-  &.active {
-    background-color: #6366f1;
-    color: white;
-    border-color: #6366f1;
-    box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3);
+  .sidebar-controls {
+    height: auto;
+    position: relative;
+    border-right: none;
+    border-bottom: 1px solid $border-color;
   }
 }
