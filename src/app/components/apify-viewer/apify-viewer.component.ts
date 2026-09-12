@@ -1,24 +1,32 @@
 // src/app/components/apify-viewer/apify-viewer.component.ts
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { JsonPipe, DatePipe, CurrencyPipe } from '@angular/common';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 import { ApifyService, ApifyPayload, ApifyAction, ApifyRunRecord } from '../../services/apify.service';
 
-// 1. IMPORTACIÓN ESTRATÉGICA: Traemos nuestro Dumb Component de UI
+// 1. IMPORTAMOS NUESTRO NUEVO SERVICIO DE LÓGICA DE GRÁFICAS
+import { ApifyChartService } from '../../services/apify-chart.service';
+
 import { ApifyDataGridComponent } from '../apify-data-grid/apify-data-grid.component';
+import { ApifyRunsTableComponent } from '../apify-runs-table/apify-runs-table.component';
 
 @Component({
   selector: 'app-apify-viewer',
   standalone: true,
-  // 2. REGISTRO: Declaramos el componente para poder usarlo en el HTML padre
-  imports: [JsonPipe, FormsModule, NgxEchartsDirective, DatePipe, CurrencyPipe, ApifyDataGridComponent],
+  imports: [
+    FormsModule,
+    NgxEchartsDirective,
+    ApifyDataGridComponent,
+    ApifyRunsTableComponent
+  ],
   templateUrl: './apify-viewer.component.html',
   styleUrl: './apify-viewer.component.scss'
 })
 export class ApifyViewerComponent {
   private apifyService = inject(ApifyService);
+  // 2. INYECTAMOS EL SERVICIO DE GRÁFICAS
+  private apifyChartService = inject(ApifyChartService);
 
   // Estados reactivos
   isLoading = signal<boolean>(false);
@@ -28,7 +36,7 @@ export class ApifyViewerComponent {
   runsList = signal<ApifyRunRecord[]>([]);
 
   // Formulario
-  selectedNetwork = signal<string>('youtube'); // Por defecto a youtube por ahora
+  selectedNetwork = signal<string>('youtube');
   actionType = signal<ApifyAction>('get-latest');
   targetUrlsInput = signal<string>('');
   resultsLimit = signal<number>(30);
@@ -78,7 +86,10 @@ export class ApifyViewerComponent {
           } else {
             console.log('[Debug Apify] Datos extraídos del Scraper:', response.data);
             this.data.set(response.data);
-            this.generateChartOptions(network, response.data);
+
+            // 3. DELEGACIÓN: El servicio calcula y devuelve las opciones de ECharts
+            const options = this.apifyChartService.buildChartOptions(network, response.data);
+            this.chartOptions.set(options);
           }
         } else {
           this.error.set('La ejecución finalizó, pero no se recuperaron datos.');
@@ -110,7 +121,6 @@ export class ApifyViewerComponent {
     const targetActorId = reverseActorMap[actorInternalId] || actorInternalId;
     const network = Object.keys(this.ACTORS_MAP).find(key => this.ACTORS_MAP[key] === targetActorId) || 'instagram';
 
-    // Actualizamos el select visualmente para que coincida con el Run cargado
     this.selectedNetwork.set(network);
 
     const payload: ApifyPayload = {
@@ -122,8 +132,12 @@ export class ApifyViewerComponent {
     this.apifyService.executeScraper(payload).subscribe({
       next: (response) => {
         if (response.success && response.data) {
+          console.log('[Debug Apify] Datos del Run Específico Seleccionado:', response.data);
           this.data.set(response.data);
-          this.generateChartOptions(network, response.data);
+
+          // 4. DELEGACIÓN: Reutilizamos el servicio para los historiales específicos
+          const options = this.apifyChartService.buildChartOptions(network, response.data);
+          this.chartOptions.set(options);
         } else {
           this.error.set('No se pudo recuperar el dataset de este historial.');
         }
@@ -134,17 +148,6 @@ export class ApifyViewerComponent {
         this.isLoading.set(false);
       }
     });
-  }
-
-  getActorFriendlyName(actorInternalId: string): string {
-    const names: Record<string, string> = {
-      'KoJrdxJCTtpon81KY': 'Facebook (Páginas)',
-      'shu8hvrXbJbY3Eb9W': 'Instagram (Perfiles)',
-      'GdWCkxBtKWOsKjdch': 'TikTok (Perfiles)',
-      'h7sDV53CddomktSi5': 'YouTube (Canales)',
-      'nFJndFXA5zjCTuudP': 'Búsqueda de Google'
-    };
-    return names[actorInternalId] || actorInternalId;
   }
 
   private buildInputPayload(network: string, urls: string[]) {
@@ -159,104 +162,5 @@ export class ApifyViewerComponent {
       case 'facebook': return { startUrls: urls.map(url => ({ url })), resultsLimit: limit };
       default: return { startUrls: urls.map(url => ({ url })) };
     }
-  }
-
-  private generateChartOptions(network: string, rawData: any[]) {
-    const groupedData: Record<string, any[]> = {};
-    let metricName = 'Métrica';
-    let itemLabel = 'Post';
-
-    if (network === 'youtube' || network === 'tiktok') itemLabel = 'Video';
-    else if (network === 'facebook' || network === 'instagram') itemLabel = 'Publicación';
-
-    const sortedData = [...rawData].sort((a, b) => {
-      const dateA = new Date(a.date || a.timestamp || a.createdAt || 0).getTime();
-      const dateB = new Date(b.date || b.timestamp || b.createdAt || 0).getTime();
-      return dateB - dateA;
-    });
-
-    sortedData.forEach(item => {
-      let authorName = 'Desconocido';
-      if (network === 'youtube') {
-        authorName = item.channelName || 'YouTube Channel';
-        metricName = 'Vistas';
-      } else if (network === 'tiktok') {
-        authorName = item.authorMeta?.name || item.author || 'TikTok Profile';
-        metricName = 'Reproducciones';
-      } else {
-        authorName = item.pageName || item.ownerUsername || item.user?.name || 'Social Profile';
-        metricName = 'Interacciones';
-      }
-
-      if (!groupedData[authorName]) groupedData[authorName] = [];
-      groupedData[authorName].push(item);
-    });
-
-    const seriesConfig: any[] = [];
-    const legendData: string[] = Object.keys(groupedData);
-    let maxItems = 0;
-    const colorPalette = ['#3ecf8e', '#6366f1', '#f43f5e', '#f59e0b', '#0ea5e9', '#8b5cf6'];
-
-    Object.entries(groupedData).forEach(([author, items], index) => {
-      if (items.length > maxItems) maxItems = items.length;
-
-      const seriesData = items.slice(0, 15).map(i => {
-        const val = network === 'youtube' ? (i.viewCount || 0) :
-                    network === 'tiktok' ? (i.playCount || 0) :
-                    (i.likesCount || i.likes || 0);
-        return { value: val, meta: i };
-      });
-
-      seriesConfig.push({
-        name: author,
-        type: 'bar',
-        data: seriesData,
-        itemStyle: { color: colorPalette[index % colorPalette.length], borderRadius: [4, 4, 0, 0] },
-        animationDuration: 1500,
-        animationEasing: 'cubicInOut'
-      });
-    });
-
-    const xAxisLabels = Array.from({ length: Math.min(maxItems, 15) }, (_, i) => `${itemLabel} ${i + 1}`);
-
-    const options: EChartsOption = {
-      title: { text: `Comparativa de ${metricName} (Cronológico)`, textStyle: { fontFamily: 'Lato', fontSize: 16, color: '#111827' } },
-      tooltip: {
-        trigger: 'item',
-        backgroundColor: 'rgba(255, 255, 255, 0.98)',
-        borderColor: '#e5e7eb',
-        padding: 12,
-        textStyle: { color: '#374151', fontFamily: 'Lato' },
-        formatter: (params: any) => {
-          const meta = params.data.meta;
-          if (!meta) return `<b>${params.seriesName}</b><br/>${params.name}: ${params.value.toLocaleString()}`;
-
-          const title = meta.title || meta.text || 'Sin texto/título';
-          const shortTitle = title.length > 70 ? title.substring(0, 70) + '...' : title;
-          const date = meta.date || meta.timestamp ? new Date(meta.date || meta.timestamp).toLocaleDateString() : 'Fecha desconocida';
-          const likes = meta.likes || meta.likesCount || 0;
-
-          return `
-            <div style="max-width: 320px; white-space: normal;">
-              <strong style="color: ${params.color}; font-size: 14px;">${params.seriesName}</strong>
-              <hr style="margin: 8px 0; border: 0; border-top: 1px solid #e5e7eb;" />
-              <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">📅 Publicado: ${date}</div>
-              <div style="font-weight: 600; font-size: 13px; line-height: 1.4; margin-bottom: 12px;">"${shortTitle}"</div>
-              <div style="display: flex; justify-content: space-between; font-size: 13px; background: #f9fafb; padding: 6px; border-radius: 4px;">
-                <span>📊 <b>${params.value.toLocaleString()}</b> ${metricName.toLowerCase()}</span>
-                <span>❤️ <b>${likes.toLocaleString()}</b> likes</span>
-              </div>
-            </div>
-          `;
-        }
-      },
-      legend: { data: legendData, top: 30, textStyle: { fontFamily: 'Lato' } },
-      grid: { left: '3%', right: '4%', bottom: '10%', top: 90, containLabel: true },
-      xAxis: { type: 'category', data: xAxisLabels, axisLabel: { fontFamily: 'Lato' } },
-      yAxis: { type: 'value', axisLabel: { fontFamily: 'Lato' } },
-      series: seriesConfig
-    };
-
-    this.chartOptions.set(options);
   }
 }

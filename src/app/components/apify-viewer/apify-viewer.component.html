@@ -100,56 +100,25 @@
       </div>
     }
 
-    <!-- VISTA DE TABLA DE HISTORIALES (RUNS) -->
+    <!-- ==========================================
+         VISTA DE TABLA DE HISTORIALES (REFACTORIZADA)
+         ========================================== -->
     @if (!isLoading() && !error() && runsList().length > 0) {
       <div class="results-header fade-in">
         <h3>Historial de Ejecuciones (Top 15)</h3>
         <p>Haz clic en cualquier ejecución exitosa para cargar los datos en el dashboard sin consumir créditos.</p>
       </div>
 
-      <div class="table-container fade-in" style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-          <thead style="background-color: #f9fafb; border-bottom: 1px solid #e5e7eb;">
-            <tr>
-              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Run ID</th>
-              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Plataforma</th>
-              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Estado</th>
-              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Fecha</th>
-              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Costo (USD)</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (run of runsList(); track run.id) {
-              <tr
-                (click)="loadSpecificRun(run.id, run.actorId)"
-                style="border-bottom: 1px solid #e5e7eb; cursor: pointer; transition: background-color 0.2s;"
-                onmouseover="this.style.backgroundColor='#f3f4f6'"
-                onmouseout="this.style.backgroundColor='transparent'">
-                <td style="padding: 1rem; font-family: monospace; color: #4b5563; font-size: 0.875rem;">
-                  {{ run.id }}
-                </td>
-                <td style="padding: 1rem; color: #111827; font-weight: 500; font-size: 0.875rem;">
-                  {{ getActorFriendlyName(run.actorId) }}
-                </td>
-                <td style="padding: 1rem;">
-                  <span [style.color]="run.status === 'SUCCEEDED' ? '#059669' : '#dc2626'" style="font-weight: 600; font-size: 0.875rem;">
-                    {{ run.status }}
-                  </span>
-                </td>
-                <td style="padding: 1rem; color: #4b5563; font-size: 0.875rem;">
-                  {{ run.startedAt | date:'medium' }}
-                </td>
-                <td style="padding: 1rem; color: #4b5563; font-size: 0.875rem;">
-                  {{ run.usageTotalUsd | currency:'USD':'symbol':'1.3-3' }}
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+      <!-- Arquitectura Limpia: Inyectamos el Dumb Component -->
+      <app-apify-runs-table
+        [runsList]="runsList()"
+        (runSelected)="loadSpecificRun($event.runId, $event.actorInternalId)">
+      </app-apify-runs-table>
     }
 
-    <!-- VISTA DE DATOS (GRÁFICA Y NUEVO GRID) -->
+    <!-- ==========================================
+         VISTA DE DATOS (GRÁFICA Y GRID DE TARJETAS)
+         ========================================== -->
     @if (!isLoading() && !error() && data().length > 0) {
       <div class="results-header fade-in">
         <h3>Datos extraídos con éxito</h3>
@@ -162,7 +131,6 @@
         </div>
       }
 
-      <!-- NUEVO: Reemplazamos el JSON crudo por nuestro componente UI limpio -->
       <h4 style="margin-bottom: 1rem; color: #374151;">Desglose de Contenido Extraído</h4>
       <div class="fade-in">
         <app-apify-data-grid
