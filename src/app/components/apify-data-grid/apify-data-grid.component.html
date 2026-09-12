@@ -1,9 +1,6 @@
 <!-- src/app/components/apify-data-grid/apify-data-grid.component.html -->
 <div class="grid-container">
   @for (item of data; track item.id || item.url || item.webVideoUrl || $index) {
-    <!-- Usamos @let para definir la red específica de este item.
-         Si estamos en modo 'omnicanal', tomamos la propiedad inyectada __network.
-         De lo contrario, usamos la red seleccionada globalmente. -->
     @let itemNetwork = network === 'omnicanal' ? (item.__network || 'unknown') : network;
 
     <article class="media-card fade-in">
@@ -11,9 +8,11 @@
       <!-- 1. HEADER: Miniatura Dinámica y Duración Unificada -->
       <div class="card-header">
         @if (getMediaThumbnail(item)) {
+          <!-- FIX: referrerpolicy="no-referrer" bloquea el rastreo y evita el Error 403 de Meta -->
           <img [src]="getMediaThumbnail(item)"
                [alt]="getPostTitle(item)"
                class="thumbnail"
+               referrerpolicy="no-referrer"
                (error)="handleImageError($event, getYouTubeId(item.url))">
 
           <!-- Insignia de duración inteligente -->
@@ -32,7 +31,7 @@
           </div>
         }
 
-        <!-- NUEVO: Etiqueta de plataforma en modo Omnicanal -->
+        <!-- Etiqueta de plataforma en modo Omnicanal -->
         @if (network === 'omnicanal') {
            <div class="omnichannel-badge" [ngClass]="itemNetwork">
              {{ itemNetwork === 'tiktok' ? '🎵 TikTok' : itemNetwork === 'instagram' ? '📸 Instagram' : itemNetwork === 'youtube' ? '▶️ YouTube' : '👍 Facebook' }}
@@ -61,17 +60,16 @@
             <div class="metric" title="Vistas">👁️ {{ (item.viewCount || 0) | number }}</div>
             <div class="metric" title="Likes">❤️ {{ (item.likes || 0) | number }}</div>
           } @else if (itemNetwork === 'tiktok') {
-            <div class="metric" title="Reproducciones">▶️ {{ (item.playCount || 0) | number }}</div>
-            <div class="metric" title="Likes">❤️ {{ (item.diggCount || 0) | number }}</div>
-            <div class="metric" title="Comentarios">💬 {{ (item.commentCount || 0) | number }}</div>
-            <div class="metric" title="Compartidos">↪️ {{ (item.shareCount || 0) | number }}</div>
+            <!-- FIX: Búsqueda profunda para métricas anidadas de TikTok -->
+            <div class="metric" title="Reproducciones">▶️ {{ (item.playCount || item.stats?.playCount || item.videoMeta?.playCount || 0) | number }}</div>
+            <div class="metric" title="Likes">❤️ {{ (item.diggCount || item.stats?.diggCount || item.videoMeta?.diggCount || 0) | number }}</div>
+            <div class="metric" title="Comentarios">💬 {{ (item.commentCount || item.stats?.commentCount || item.videoMeta?.commentCount || 0) | number }}</div>
           } @else if (itemNetwork === 'facebook') {
             <div class="metric" title="Likes">👍 {{ (item.likes || item.reactionLikeCount || 0) | number }}</div>
             <div class="metric" title="Comentarios">💬 {{ (item.comments || item.topComments?.length || 0) | number }}</div>
-            <div class="metric" title="Compartidos">↪️ {{ (item.shares || 0) | number }}</div>
           } @else if (itemNetwork === 'instagram') {
-            @if (item.videoPlayCount || item.videoViewCount) {
-              <div class="metric" title="Reproducciones">▶️ {{ (item.videoPlayCount || item.videoViewCount || 0) | number }}</div>
+            @if (item.videoPlayCount || item.videoViewCount || item.playCount) {
+              <div class="metric" title="Reproducciones">▶️ {{ (item.videoPlayCount || item.videoViewCount || item.playCount || 0) | number }}</div>
             }
             <div class="metric" title="Likes">❤️ {{ (item.likesCount || 0) | number }}</div>
             <div class="metric" title="Comentarios">💬 {{ (item.commentsCount || 0) | number }}</div>

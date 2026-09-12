@@ -4,27 +4,69 @@ import type { EChartsOption } from 'echarts';
 
 export type ChartMetric = 'total' | 'views' | 'likes' | 'comments';
 
+interface BrandConfig {
+  id: string;
+  name: string;
+  keywords: string[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class ApifyChartService {
 
-  private readonly colorPalette = ['#3ecf8e', '#6366f1', '#f43f5e', '#f59e0b', '#0ea5e9', '#8b5cf6'];
+  private readonly colorPalette = [
+    '#3ecf8e', '#6366f1', '#f43f5e', '#f59e0b', '#0ea5e9',
+    '#8b5cf6', '#a855f7', '#ec4899', '#14b8a6', '#f97316'
+  ];
 
   // ==========================================
-  // HELPERS (PRINCIPIO DRY)
+  // NORMALIZADOR ESCALABLE (MATRIZ DE MARCAS LATAM)
+  // ==========================================
+  private readonly BRAND_DICTIONARY: BrandConfig[] = [
+    { id: 'hills', name: "Hill's Pet Nutrition", keywords: ['hill', 'science diet'] },
+    { id: 'purina', name: 'Purina Pro Plan', keywords: ['pro plan', 'proplan', 'purina'] },
+    { id: 'royal', name: 'Royal Canin', keywords: ['royal canin', 'royalcanin'] },
+    { id: 'nupec', name: 'Nupec', keywords: ['nupec'] },
+    { id: 'agility', name: 'Agility Gold', keywords: ['agility'] },
+    { id: 'chunky', name: 'Chunky Mascotas', keywords: ['chunky'] },
+    { id: 'pets_table', name: "Pet's Table", keywords: ["pet's table", 'pets table'] },
+    { id: 'virbac', name: 'Virbac', keywords: ['virbac'] },
+    { id: 'bonnat', name: 'Bonnat', keywords: ['bonnat'] },
+    { id: 'true_blue', name: 'True Blue', keywords: ['true blue', 'trueblue'] },
+    { id: 'brit', name: 'Brit', keywords: ['brit'] },
+    { id: 'bravery', name: 'Bravery', keywords: ['bravery'] },
+    { id: 'b2b_media', name: 'Medios y Eventos B2B', keywords: ['pet industry', 'smartdogs', 'congreso', 'cvdc', 'balance dogs', 'orbit'] }
+  ];
+
+  public getNormalizedBrandName(item: any): string {
+    const rawName = item.ownerFullName || item.ownerUsername || item.channelName || item.pageName || item.authorMeta?.name || item.user?.name || 'Desconocido';
+    const nameLower = rawName.toLowerCase();
+
+    const matchedBrand = this.BRAND_DICTIONARY.find(brand =>
+      brand.keywords.some(keyword => nameLower.includes(keyword))
+    );
+
+    if (matchedBrand) return matchedBrand.name;
+
+    return 'Embajadores / Creadores';
+  }
+
+  // ==========================================
+  // HELPERS INTERNOS
   // ==========================================
 
   private formatCompactNumber(value: number): string {
+    if (!value || value === 0) return '0';
     if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
-    if (value >= 1000) return (value / 1000).toFixed(0) + 'k';
+    if (value >= 1000) return (value / 1000).toFixed(1) + 'k';
     return String(value);
   }
 
   private extractDate(item: any): Date {
-    const rawDate = item.timestamp || item.time || item.date || item.createTimeISO || item.createdAt;
+    const rawDate = item.timestamp || item.time || item.date || item.createTimeISO || item.createdAt || item.videoMeta?.createTime || item.createTime;
     if (item.createTime && typeof item.createTime === 'number') {
-       return new Date(item.createTime * 1000);
+       return new Date(item.createTime < 10000000000 ? item.createTime * 1000 : item.createTime);
     }
     if (typeof rawDate === 'number' && rawDate < 10000000000) {
       return new Date(rawDate * 1000);
@@ -32,19 +74,30 @@ export class ApifyChartService {
     return rawDate ? new Date(rawDate) : new Date();
   }
 
+  // FIX: Extracción corregida para leer desde la raíz del objeto en TikTok
   private getMetricValue(item: any, network: string, metric: ChartMetric): number {
     if (metric === 'views') {
-      if (network === 'instagram') return item.videoPlayCount || item.videoViewCount || 0;
+      if (network === 'instagram') return item.videoPlayCount || item.videoViewCount || item.playCount || item.viewsCount || 0;
+      if (network === 'tiktok') return item.playCount || item.stats?.playCount || item.videoMeta?.playCount || 0;
       return item.viewsCount || item.viewCount || item.playCount || item.videoPostViewCount || 0;
     }
     if (metric === 'likes') {
+      if (network === 'tiktok') return item.diggCount || item.stats?.diggCount || item.videoMeta?.diggCount || 0;
       return item.likesCount || item.likes || item.diggCount || item.reactionLikeCount || 0;
     }
     if (metric === 'comments') {
+      if (network === 'tiktok') return item.commentCount || item.stats?.commentCount || item.videoMeta?.commentCount || 0;
       return item.commentsCount || item.commentCount || item.comments || 0;
     }
+
+    // Engagement Total
     if (network === 'youtube') return item.viewCount || 0;
-    if (network === 'tiktok') return item.playCount || 0;
+    if (network === 'tiktok') {
+      const likes = item.diggCount || item.stats?.diggCount || item.videoMeta?.diggCount || 0;
+      const comments = item.commentCount || item.stats?.commentCount || item.videoMeta?.commentCount || 0;
+      const shares = item.shareCount || item.stats?.shareCount || item.videoMeta?.shareCount || 0;
+      return likes + comments + shares;
+    }
     if (network === 'facebook') return (item.likes || 0) + (item.comments || 0) + (item.shares || 0);
 
     return (item.likesCount || item.likes || 0) + (item.commentsCount || item.comments || 0);
@@ -61,12 +114,15 @@ export class ApifyChartService {
   }
 
   // ==========================================
-  // 1. GRÁFICOS INDIVIDUALES POR RED
+  // GRÁFICOS
   // ==========================================
 
   buildChartOptions(network: string, rawData: any[], metric: ChartMetric = 'total'): EChartsOption {
     const metricName = this.getMetricLabel(metric);
-    const dates = rawData.map(i => this.extractDate(i));
+    const dates = rawData.map(i => this.extractDate(i)).filter(d => !isNaN(d.getTime()));
+
+    if (dates.length === 0) return {};
+
     const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
     const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
     const diffDays = (maxDate.getTime() - minDate.getTime()) / (1000 * 3600 * 24);
@@ -79,7 +135,7 @@ export class ApifyChartService {
         : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     };
 
-    const uniqueTimeKeys = Array.from(new Set(rawData.map(i => getFormatKey(this.extractDate(i))))).sort();
+    const uniqueTimeKeys = Array.from(new Set(dates.map(d => getFormatKey(d)))).sort();
 
     const xAxisLabels = uniqueTimeKeys.map(key => {
       if (isDaily) {
@@ -94,7 +150,7 @@ export class ApifyChartService {
     const groupedData: Record<string, Record<string, number>> = {};
 
     rawData.forEach(item => {
-      let authorName = item.ownerFullName || item.channelName || item.pageName || item.authorMeta?.name || item.ownerUsername || item.user?.name || 'Competidor';
+      const authorName = this.getNormalizedBrandName(item);
       const timeKey = getFormatKey(this.extractDate(item));
       const value = this.getMetricValue(item, network, metric);
 
@@ -102,7 +158,9 @@ export class ApifyChartService {
         groupedData[authorName] = {};
         uniqueTimeKeys.forEach(k => groupedData[authorName][k] = 0);
       }
-      groupedData[authorName][timeKey] += value;
+      if(groupedData[authorName][timeKey] !== undefined) {
+         groupedData[authorName][timeKey] += value;
+      }
     });
 
     const seriesConfig: any[] = [];
@@ -138,16 +196,32 @@ export class ApifyChartService {
     const aggregatedData: Record<string, number> = {};
     const metricName = this.getMetricLabel(metric);
 
+    let hasData = false;
+
     rawData.forEach(item => {
-      let authorName = item.ownerFullName || item.channelName || item.pageName || item.authorMeta?.name || item.ownerUsername || item.user?.name || 'Competidor';
+      const authorName = this.getNormalizedBrandName(item);
       const value = this.getMetricValue(item, network, metric);
       if (!aggregatedData[authorName]) aggregatedData[authorName] = 0;
       aggregatedData[authorName] += value;
+      if (value > 0) hasData = true;
     });
 
-    const pieData = Object.entries(aggregatedData).map(([name, value], index) => ({
-      name, value, itemStyle: { color: this.colorPalette[index % this.colorPalette.length] }
-    }));
+    if (!hasData) {
+      return {
+        title: { text: 'Cuota de Mercado (Market Share)', subtext: `No hay datos de ${metricName}`, left: 'center', textStyle: { fontFamily: 'Lato', fontSize: 16, color: '#111827' } },
+        series: [{
+          name: 'Sin datos', type: 'pie', radius: ['35%', '50%'], center: ['50%', '50%'],
+          itemStyle: { color: '#e5e7eb' },
+          label: { show: false },
+          data: [{ name: 'Sin registros', value: 1 }]
+        }]
+      };
+    }
+
+    const pieData = Object.entries(aggregatedData)
+      .map(([name, value], index) => ({
+        name, value, itemStyle: { color: this.colorPalette[index % this.colorPalette.length] }
+      }));
 
     return {
       title: { text: 'Cuota de Mercado (Market Share)', subtext: `Basado en ${metricName}`, left: 'center', textStyle: { fontFamily: 'Lato', fontSize: 16, color: '#111827' } },
@@ -169,7 +243,7 @@ export class ApifyChartService {
     const groupedData: Record<string, any[]> = {};
 
     rawData.forEach(item => {
-      let authorName = item.ownerFullName || item.channelName || item.pageName || item.authorMeta?.name || item.ownerUsername || item.user?.name || 'Competidor';
+      const authorName = this.getNormalizedBrandName(item);
       if (!groupedData[authorName]) groupedData[authorName] = [];
       groupedData[authorName].push(item);
     });
@@ -220,10 +294,6 @@ export class ApifyChartService {
     };
   }
 
-  // ==========================================
-  // 2. NUEVO: MASTER GRAPH OMNICANAL
-  // ==========================================
-
   buildMasterOmnichannelChart(aggregatedData: any[], metric: ChartMetric = 'total'): EChartsOption {
     const metricName = this.getMetricLabel(metric);
     const networks = ['facebook', 'instagram', 'tiktok', 'youtube'];
@@ -231,11 +301,9 @@ export class ApifyChartService {
 
     const brandNetworkMap: Record<string, Record<string, number>> = {};
 
-    // Agrupamos el volumen total por Competidor y por Red Social
     aggregatedData.forEach(item => {
-       // Asumimos que el payload ahora inyectará a qué red pertenece cada registro
        const net = item.__network || 'unknown';
-       const authorName = item.ownerFullName || item.channelName || item.pageName || item.authorMeta?.name || item.ownerUsername || item.user?.name || 'Competidor';
+       const authorName = this.getNormalizedBrandName(item);
        const val = this.getMetricValue(item, net, metric);
 
        if (!brandNetworkMap[authorName]) {
@@ -249,7 +317,6 @@ export class ApifyChartService {
     const seriesConfig: any[] = [];
     const legendData = Object.keys(brandNetworkMap);
 
-    // Creamos barras agrupadas por marca
     Object.entries(brandNetworkMap).forEach(([brand, netData], index) => {
        seriesConfig.push({
          name: brand,
@@ -257,28 +324,15 @@ export class ApifyChartService {
          data: networks.map(n => netData[n]),
          itemStyle: { color: this.colorPalette[index % this.colorPalette.length], borderRadius: [4, 4, 0, 0] },
          label: {
-           show: true,
-           position: 'top',
-           fontFamily: 'Lato',
-           fontSize: 10,
-           color: '#6b7280',
+           show: true, position: 'top', fontFamily: 'Lato', fontSize: 10, color: '#6b7280',
            formatter: (p: any) => p.value > 0 ? this.formatCompactNumber(p.value) : ''
          }
        });
     });
 
     return {
-      title: {
-        text: `Share of Voice Omnicanal`,
-        subtext: `Comparativa de ${metricName} en todo el Ecosistema Digital`,
-        textStyle: { fontFamily: 'Lato', fontSize: 16, color: '#111827' }
-      },
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        backgroundColor: 'rgba(255, 255, 255, 0.98)',
-        textStyle: { fontFamily: 'Lato' }
-      },
+      title: { text: `Share of Voice Omnicanal`, subtext: `Comparativa de ${metricName} en todo el Ecosistema Digital`, textStyle: { fontFamily: 'Lato', fontSize: 16, color: '#111827' } },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: 'rgba(255, 255, 255, 0.98)', textStyle: { fontFamily: 'Lato' } },
       legend: { data: legendData, top: 60, textStyle: { fontFamily: 'Lato' } },
       grid: { left: '3%', right: '4%', bottom: '5%', top: 110, containLabel: true },
       xAxis: { type: 'category', data: displayNetworks, axisLabel: { fontFamily: 'Lato', fontWeight: 'bold' } },

@@ -13,6 +13,14 @@ export class ApifyDataGridComponent {
   @Input({ required: true }) data: any[] = [];
   @Input({ required: true }) network: string = 'youtube';
 
+  // ==========================================
+  // HELPER: DETECTOR DE RED DINÁMICO
+  // ==========================================
+  private getItemNetwork(item: any): string {
+    // Si el grid está en modo omnicanal, busca el origen real del post; si no, usa el global
+    return this.network === 'omnicanal' ? (item.__network || 'unknown') : this.network;
+  }
+
   getYouTubeId(url: string): string | null {
     if (!url) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -31,18 +39,19 @@ export class ApifyDataGridComponent {
   // ==========================================
 
   getAuthorName(item: any): string {
-    // Agregamos ownerFullName como prioridad para Instagram
     return item.ownerFullName || item.channelName || item.pageName || item.authorMeta?.name || item.ownerUsername || item.user?.name || 'Competidor';
   }
 
   getMediaThumbnail(item: any): string | null {
-    if (this.network === 'youtube') {
+    const net = this.getItemNetwork(item);
+
+    if (net === 'youtube') {
       if (item.thumbnailUrl) return item.thumbnailUrl;
       const id = this.getYouTubeId(item.url);
       return id ? `https://img.youtube.com/vi/${id}/maxresdefault.jpg` : null;
     }
 
-    if (this.network === 'facebook') {
+    if (net === 'facebook') {
       if (item.media && Array.isArray(item.media)) {
         const validMedia = item.media.find((m: any) => m.thumbnail || m.image?.uri || m.photo_image?.uri);
         if (validMedia) {
@@ -52,12 +61,11 @@ export class ApifyDataGridComponent {
       return null;
     }
 
-    if (this.network === 'instagram') {
-      // Instagram siempre entrega displayUrl como la mejor resolución de la portada
+    if (net === 'instagram') {
       return item.displayUrl || item.thumbnailUrl || item.imageUrl || null;
     }
 
-    if (this.network === 'tiktok') {
+    if (net === 'tiktok') {
       return item.videoMeta?.coverUrl || item.authorMeta?.avatar || item.imageUrl || null;
     }
 
@@ -65,13 +73,13 @@ export class ApifyDataGridComponent {
   }
 
   getPostTitle(item: any): string {
-    // Priorizamos 'caption' que es el estándar en Instagram
+    const net = this.getItemNetwork(item);
+
     if (item.caption) return item.caption;
     if (item.title) return item.title;
     if (item.text) return item.text;
 
-    // Edge case Facebook
-    if (this.network === 'facebook' && item.media && item.media.length > 0) {
+    if (net === 'facebook' && item.media && item.media.length > 0) {
       const firstMedia = item.media[0];
       const errorText = firstMedia.title_with_entities?.text || '';
       if (errorText.includes("isn't available") || errorText.includes("no está disponible") || errorText.includes("deleted")) {
@@ -83,7 +91,7 @@ export class ApifyDataGridComponent {
   }
 
   getPostDate(item: any): Date {
-    const rawDate = item.timestamp || item.time || item.date || item.createTimeISO || item.createdAt;
+    const rawDate = item.timestamp || item.time || item.date || item.createTimeISO || item.createdAt || item.videoMeta?.createTime;
     if (item.createTime && typeof item.createTime === 'number') {
        return new Date(item.createTime * 1000);
     }
@@ -93,17 +101,16 @@ export class ApifyDataGridComponent {
     return rawDate ? new Date(rawDate) : new Date();
   }
 
-  /**
-   * NUEVO: Formateador unificado de duración para YouTube, TikTok e Instagram Reels
-   */
   getFormattedDuration(item: any): string | null {
-    if (this.network === 'youtube' && item.duration) return item.duration;
+    const net = this.getItemNetwork(item);
+
+    if (net === 'youtube' && item.duration) return item.duration;
 
     let seconds = 0;
-    if (this.network === 'tiktok' && item.videoMeta?.duration) {
-      seconds = item.videoMeta.duration; // TikTok envía segundos enteros
-    } else if (this.network === 'instagram' && item.videoDuration) {
-      seconds = Math.round(item.videoDuration); // Instagram envía decimales (ej. 41.27)
+    if (net === 'tiktok' && item.videoMeta?.duration) {
+      seconds = item.videoMeta.duration;
+    } else if (net === 'instagram' && item.videoDuration) {
+      seconds = Math.round(item.videoDuration);
     } else {
       return null;
     }
