@@ -1,12 +1,12 @@
 // src/app/components/apify-viewer/apify-viewer.component.ts
 import { Component, inject, signal } from '@angular/core';
+import { CommonModule, TitleCasePipe } from '@angular/common'; // <-- 1. Importamos el Pipe
 import { FormsModule } from '@angular/forms';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 import { ApifyService, ApifyPayload, ApifyAction, ApifyRunRecord } from '../../services/apify.service';
 
-// 1. IMPORTAMOS NUESTRO NUEVO SERVICIO DE LÓGICA DE GRÁFICAS
-import { ApifyChartService } from '../../services/apify-chart.service';
+import { ApifyChartService, ChartMetric } from '../../services/apify-chart.service';
 
 import { ApifyDataGridComponent } from '../apify-data-grid/apify-data-grid.component';
 import { ApifyRunsTableComponent } from '../apify-runs-table/apify-runs-table.component';
@@ -15,6 +15,8 @@ import { ApifyRunsTableComponent } from '../apify-runs-table/apify-runs-table.co
   selector: 'app-apify-viewer',
   standalone: true,
   imports: [
+    CommonModule,     // Buena práctica: trae directivas comunes y pipes por defecto
+    TitleCasePipe,    // <-- 2. Lo registramos explícitamente para usarlo en el HTML
     FormsModule,
     NgxEchartsDirective,
     ApifyDataGridComponent,
@@ -25,15 +27,20 @@ import { ApifyRunsTableComponent } from '../apify-runs-table/apify-runs-table.co
 })
 export class ApifyViewerComponent {
   private apifyService = inject(ApifyService);
-  // 2. INYECTAMOS EL SERVICIO DE GRÁFICAS
   private apifyChartService = inject(ApifyChartService);
 
-  // Estados reactivos
+  // Estados reactivos principales
   isLoading = signal<boolean>(false);
   error = signal<string | null>(null);
   data = signal<any[]>([]);
-  chartOptions = signal<EChartsOption | null>(null);
   runsList = signal<ApifyRunRecord[]>([]);
+
+  // Estados reactivos para Gráficas y Filtros
+  chartOptions = signal<EChartsOption | null>(null);
+  marketShareChartOptions = signal<EChartsOption | null>(null);
+
+  // Control del filtro actual seleccionado
+  selectedMetric = signal<ChartMetric>('total');
 
   // Formulario
   selectedNetwork = signal<string>('youtube');
@@ -64,6 +71,7 @@ export class ApifyViewerComponent {
     this.error.set(null);
     this.data.set([]);
     this.chartOptions.set(null);
+    this.marketShareChartOptions.set(null);
     this.runsList.set([]);
 
     const network = this.selectedNetwork();
@@ -81,15 +89,14 @@ export class ApifyViewerComponent {
       next: (response) => {
         if (response.success && response.data) {
           if (this.actionType() === 'list-runs') {
-            console.log('[Debug Apify] Lista de Runs (Historiales):', response.data);
             this.runsList.set(response.data as ApifyRunRecord[]);
           } else {
-            console.log('[Debug Apify] Datos extraídos del Scraper:', response.data);
             this.data.set(response.data);
 
-            // 3. DELEGACIÓN: El servicio calcula y devuelve las opciones de ECharts
-            const options = this.apifyChartService.buildChartOptions(network, response.data);
-            this.chartOptions.set(options);
+            // Al cargar nuevos datos, reiniciamos el filtro a 'total'
+            this.selectedMetric.set('total');
+            this.chartOptions.set(this.apifyChartService.buildChartOptions(network, response.data, 'total'));
+            this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(network, response.data, 'total'));
           }
         } else {
           this.error.set('La ejecución finalizó, pero no se recuperaron datos.');
@@ -108,6 +115,7 @@ export class ApifyViewerComponent {
     this.error.set(null);
     this.data.set([]);
     this.chartOptions.set(null);
+    this.marketShareChartOptions.set(null);
     this.runsList.set([]);
 
     const reverseActorMap: Record<string, string> = {
@@ -132,12 +140,11 @@ export class ApifyViewerComponent {
     this.apifyService.executeScraper(payload).subscribe({
       next: (response) => {
         if (response.success && response.data) {
-          console.log('[Debug Apify] Datos del Run Específico Seleccionado:', response.data);
           this.data.set(response.data);
 
-          // 4. DELEGACIÓN: Reutilizamos el servicio para los historiales específicos
-          const options = this.apifyChartService.buildChartOptions(network, response.data);
-          this.chartOptions.set(options);
+          this.selectedMetric.set('total');
+          this.chartOptions.set(this.apifyChartService.buildChartOptions(network, response.data, 'total'));
+          this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(network, response.data, 'total'));
         } else {
           this.error.set('No se pudo recuperar el dataset de este historial.');
         }
@@ -148,6 +155,17 @@ export class ApifyViewerComponent {
         this.isLoading.set(false);
       }
     });
+  }
+
+  applyFilter(metric: ChartMetric) {
+    this.selectedMetric.set(metric);
+    const currentData = this.data();
+    const currentNetwork = this.selectedNetwork();
+
+    if (currentData.length > 0) {
+      this.chartOptions.set(this.apifyChartService.buildChartOptions(currentNetwork, currentData, metric));
+      this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(currentNetwork, currentData, metric));
+    }
   }
 
   private buildInputPayload(network: string, urls: string[]) {

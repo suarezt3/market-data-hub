@@ -1,3 +1,4 @@
+<!-- src/app/components/apify-viewer/apify-viewer.component.html -->
 <div class="dashboard-layout">
 
   <!-- PANEL LATERAL (CONTROLES) -->
@@ -35,7 +36,6 @@
       </div>
     </div>
 
-    <!-- CONTROLES AVANZADOS (Solo visibles para Nuevas Extracciones) -->
     @if (actionType() === 'run') {
       <div class="fade-in" style="display: flex; flex-direction: column; gap: 1.5rem;">
         <div class="control-group">
@@ -62,17 +62,11 @@
 
         <div class="control-group">
           <label>5. Límite de Resultados por URL</label>
-          <input
-            type="number"
-            [(ngModel)]="resultsLimit"
-            min="1"
-            max="1000"
-            class="form-input">
+          <input type="number" [(ngModel)]="resultsLimit" min="1" max="1000" class="form-input">
         </div>
       </div>
     }
 
-    <!-- Botón de Acción -->
     <button (click)="fetchData()" [disabled]="isLoading()" class="btn-primary btn-block" style="margin-top: 1.5rem;">
       @if (isLoading()) {
         <span>Procesando...</span>
@@ -88,9 +82,7 @@
   <main class="dashboard-content">
 
     @if (error()) {
-      <div class="alert alert-error">
-        <strong>⚠️ Error:</strong> {{ error() }}
-      </div>
+      <div class="alert alert-error"><strong>⚠️ Error:</strong> {{ error() }}</div>
     }
 
     @if (isLoading()) {
@@ -100,36 +92,79 @@
       </div>
     }
 
-    <!-- ==========================================
-         VISTA DE TABLA DE HISTORIALES (REFACTORIZADA)
-         ========================================== -->
+    <!-- TABLA DE HISTORIALES -->
     @if (!isLoading() && !error() && runsList().length > 0) {
       <div class="results-header fade-in">
         <h3>Historial de Ejecuciones (Top 15)</h3>
         <p>Haz clic en cualquier ejecución exitosa para cargar los datos en el dashboard sin consumir créditos.</p>
       </div>
-
-      <!-- Arquitectura Limpia: Inyectamos el Dumb Component -->
       <app-apify-runs-table
         [runsList]="runsList()"
         (runSelected)="loadSpecificRun($event.runId, $event.actorInternalId)">
       </app-apify-runs-table>
     }
 
-    <!-- ==========================================
-         VISTA DE DATOS (GRÁFICA Y GRID DE TARJETAS)
-         ========================================== -->
+    <!-- ÁREA DE DASHBOARD Y GRÁFICAS -->
     @if (!isLoading() && !error() && data().length > 0) {
-      <div class="results-header fade-in">
-        <h3>Datos extraídos con éxito</h3>
-        <p>Se consolidaron {{ data().length }} registros en total.</p>
+
+      <!-- HEADER CON BRANDING DINÁMICO -->
+      <div class="results-header fade-in" style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; margin-bottom: 2rem;">
+        <div>
+          <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+            <!-- Icono dinámico según la red -->
+            <span style="font-size: 1.5rem;">
+              {{ selectedNetwork() === 'tiktok' ? '🎵' : selectedNetwork() === 'instagram' ? '📸' : selectedNetwork() === 'youtube' ? '▶️' : '👍' }}
+            </span>
+            Insights de Mercado en {{ selectedNetwork() | titlecase }}
+          </h3>
+          <p>Se consolidaron {{ data().length }} registros en total para el análisis.</p>
+        </div>
       </div>
 
-      @if (chartOptions()) {
-        <div class="chart-container fade-in" style="height: 450px; margin-bottom: 2.5rem; background: #ffffff; padding: 1.5rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-          <div echarts [options]="chartOptions()!" style="height: 100%; width: 100%;"></div>
-        </div>
-      }
+      <!-- NUEVO: PANEL DE FILTROS INTERACTIVOS -->
+      <div class="filters-panel fade-in" style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
+        <button
+          class="filter-pill"
+          [class.active]="selectedMetric() === 'total'"
+          (click)="applyFilter('total')">
+          📈 Engagement Total
+        </button>
+        <button
+          class="filter-pill"
+          [class.active]="selectedMetric() === 'views'"
+          (click)="applyFilter('views')">
+          👁️ Vistas / Reproducciones
+        </button>
+        <button
+          class="filter-pill"
+          [class.active]="selectedMetric() === 'likes'"
+          (click)="applyFilter('likes')">
+          ❤️ Me Gusta
+        </button>
+        <button
+          class="filter-pill"
+          [class.active]="selectedMetric() === 'comments'"
+          (click)="applyFilter('comments')">
+          💬 Comentarios
+        </button>
+      </div>
+
+      <!-- Layout CSS Grid para gráficas -->
+      <div class="charts-grid fade-in" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
+
+        @if (marketShareChartOptions()) {
+          <div class="chart-card" style="height: 450px; background: #ffffff; padding: 1.5rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div echarts [options]="marketShareChartOptions()!" style="height: 100%; width: 100%;"></div>
+          </div>
+        }
+
+        @if (chartOptions()) {
+          <div class="chart-card" style="height: 450px; background: #ffffff; padding: 1.5rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div echarts [options]="chartOptions()!" style="height: 100%; width: 100%;"></div>
+          </div>
+        }
+
+      </div>
 
       <h4 style="margin-bottom: 1rem; color: #374151;">Desglose de Contenido Extraído</h4>
       <div class="fade-in">
