@@ -1,0 +1,184 @@
+<div class="dashboard-layout">
+
+  <!-- PANEL LATERAL (CONTROLES) -->
+  <aside class="sidebar-controls">
+    <div class="brand-header">
+      <h2>Market Intelligence</h2>
+      <p>Análisis de Competencia LATAM</p>
+    </div>
+
+    <div class="control-group">
+      <label>1. Plataforma a Analizar</label>
+      <select [(ngModel)]="selectedNetwork" class="form-input">
+        <option value="facebook">Facebook (Páginas)</option>
+        <option value="instagram">Instagram (Perfiles)</option>
+        <option value="tiktok">TikTok (Perfiles)</option>
+        <option value="youtube">YouTube (Canales)</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>2. Origen de Datos</label>
+      <div class="radio-group">
+        <label class="radio-label">
+          <input type="radio" name="actionType" value="get-latest" [(ngModel)]="actionType">
+          <span>Último Historial (Rápido)</span>
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="actionType" value="run" [(ngModel)]="actionType">
+          <span>Nueva Extracción (1-2 min)</span>
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="actionType" value="list-runs" [(ngModel)]="actionType">
+          <span>Ver Historial de Ejecuciones</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- CONTROLES AVANZADOS (Solo visibles para Nuevas Extracciones) -->
+    @if (actionType() === 'run') {
+      <div class="fade-in" style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <div class="control-group">
+          <label>3. URLs de los Competidores</label>
+          <textarea
+            [(ngModel)]="targetUrlsInput"
+            rows="5"
+            placeholder="Ingresa una URL por línea..."
+            class="form-input"
+            style="resize: vertical;"></textarea>
+          <small style="color: #6b7280; font-size: 0.75rem; margin-top: 0.25rem;">
+            Pega un enlace por línea. Se procesarán en paralelo.
+          </small>
+        </div>
+
+        <div class="control-group">
+          <label>4. Contenido a Extraer</label>
+          <select [(ngModel)]="scrapeType" class="form-input">
+            <option value="posts">Publicaciones (Posts)</option>
+            <option value="comments">Comentarios</option>
+            <option value="details">Detalles del Perfil</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>5. Límite de Resultados por URL</label>
+          <input
+            type="number"
+            [(ngModel)]="resultsLimit"
+            min="1"
+            max="1000"
+            class="form-input">
+        </div>
+      </div>
+    }
+
+    <!-- Botón de Acción -->
+    <button (click)="fetchData()" [disabled]="isLoading()" class="btn-primary btn-block" style="margin-top: 1.5rem;">
+      @if (isLoading()) {
+        <span>Procesando...</span>
+      } @else if (actionType() === 'list-runs') {
+        <span>Cargar Historiales</span>
+      } @else {
+        <span>Ejecutar Consulta</span>
+      }
+    </button>
+  </aside>
+
+  <!-- ÁREA PRINCIPAL (RESULTADOS) -->
+  <main class="dashboard-content">
+
+    @if (error()) {
+      <div class="alert alert-error">
+        <strong>⚠️ Error:</strong> {{ error() }}
+      </div>
+    }
+
+    @if (isLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Comunicándose con Supabase y Apify. Por favor espera...</p>
+      </div>
+    }
+
+    <!-- VISTA DE TABLA DE HISTORIALES (RUNS) -->
+    @if (!isLoading() && !error() && runsList().length > 0) {
+      <div class="results-header fade-in">
+        <h3>Historial de Ejecuciones (Top 15)</h3>
+        <p>Haz clic en cualquier ejecución exitosa para cargar los datos en el dashboard sin consumir créditos.</p>
+      </div>
+
+      <div class="table-container fade-in" style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead style="background-color: #f9fafb; border-bottom: 1px solid #e5e7eb;">
+            <tr>
+              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Run ID</th>
+              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Plataforma</th>
+              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Estado</th>
+              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Fecha</th>
+              <th style="padding: 1rem; font-weight: 600; color: #374151; font-size: 0.875rem;">Costo (USD)</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (run of runsList(); track run.id) {
+              <tr
+                (click)="loadSpecificRun(run.id, run.actorId)"
+                style="border-bottom: 1px solid #e5e7eb; cursor: pointer; transition: background-color 0.2s;"
+                onmouseover="this.style.backgroundColor='#f3f4f6'"
+                onmouseout="this.style.backgroundColor='transparent'">
+                <td style="padding: 1rem; font-family: monospace; color: #4b5563; font-size: 0.875rem;">
+                  {{ run.id }}
+                </td>
+                <td style="padding: 1rem; color: #111827; font-weight: 500; font-size: 0.875rem;">
+                  {{ getActorFriendlyName(run.actorId) }}
+                </td>
+                <td style="padding: 1rem;">
+                  <span [style.color]="run.status === 'SUCCEEDED' ? '#059669' : '#dc2626'" style="font-weight: 600; font-size: 0.875rem;">
+                    {{ run.status }}
+                  </span>
+                </td>
+                <td style="padding: 1rem; color: #4b5563; font-size: 0.875rem;">
+                  {{ run.startedAt | date:'medium' }}
+                </td>
+                <td style="padding: 1rem; color: #4b5563; font-size: 0.875rem;">
+                  {{ run.usageTotalUsd | currency:'USD':'symbol':'1.3-3' }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    <!-- VISTA DE DATOS (GRÁFICA Y NUEVO GRID) -->
+    @if (!isLoading() && !error() && data().length > 0) {
+      <div class="results-header fade-in">
+        <h3>Datos extraídos con éxito</h3>
+        <p>Se consolidaron {{ data().length }} registros en total.</p>
+      </div>
+
+      @if (chartOptions()) {
+        <div class="chart-container fade-in" style="height: 450px; margin-bottom: 2.5rem; background: #ffffff; padding: 1.5rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <div echarts [options]="chartOptions()!" style="height: 100%; width: 100%;"></div>
+        </div>
+      }
+
+      <!-- NUEVO: Reemplazamos el JSON crudo por nuestro componente UI limpio -->
+      <h4 style="margin-bottom: 1rem; color: #374151;">Desglose de Contenido Extraído</h4>
+      <div class="fade-in">
+        <app-apify-data-grid
+          [data]="data()"
+          [network]="selectedNetwork()">
+        </app-apify-data-grid>
+      </div>
+    }
+
+    <!-- ESTADO VACÍO GLOBAL -->
+    @if (!isLoading() && !error() && data().length === 0 && runsList().length === 0) {
+      <div class="empty-state fade-in">
+        <div class="empty-icon">📊</div>
+        <h3>Panel de Control Listo</h3>
+        <p>Selecciona una red social, elige el origen de datos en el menú izquierdo y haz clic en el botón de acción para comenzar.</p>
+      </div>
+    }
+  </main>
+</div>

@@ -1,0 +1,67 @@
+<!-- src/app/components/apify-data-grid/apify-data-grid.component.html -->
+<div class="grid-container">
+  @for (item of data; track item.url || $index) {
+    <article class="media-card fade-in">
+
+      <!-- 1. HEADER: Miniatura Dinámica -->
+      <div class="card-header">
+        @if (network === 'youtube' && getYouTubeId(item.url)) {
+          <img [src]="'https://img.youtube.com/vi/' + getYouTubeId(item.url) + '/maxresdefault.jpg'"
+               [alt]="item.title"
+               class="thumbnail"
+               (error)="handleImageError($event, getYouTubeId(item.url))">
+          <span class="duration-badge">{{ item.duration || '00:00' }}</span>
+        } @else {
+          <!-- Fallback elegante para redes que no exponen una miniatura fácil -->
+          <div class="placeholder-thumbnail">
+            <span class="network-icon">
+              {{ network === 'tiktok' ? '🎵' : network === 'instagram' ? '📸' : network === 'facebook' ? '👍' : '📊' }}
+            </span>
+            <span>{{ network | titlecase }} Content</span>
+          </div>
+        }
+      </div>
+
+      <!-- 2. BODY: Información del Contenido -->
+      <div class="card-body">
+        <div class="brand-badge">{{ getAuthorName(item) }}</div>
+
+        <h4 class="title" [title]="item.title || item.text || ''">
+          {{ (item.title || item.text || 'Contenido sin texto descriptivo') | slice:0:70 }}
+          {{ (item.title || item.text)?.length > 70 ? '...' : '' }}
+        </h4>
+
+        <div class="publish-date">
+          📅 {{ (item.date || item.timestamp || item.createdAt) | date:'mediumDate' }}
+        </div>
+      </div>
+
+      <!-- 3. FOOTER: Métricas Clave y Acción -->
+      <div class="card-footer">
+        <div class="metrics">
+          @if (network === 'youtube') {
+            <div class="metric" title="Vistas">👁️ {{ (item.viewCount || 0) | number }}</div>
+            <div class="metric" title="Likes">❤️ {{ (item.likes || 0) | number }}</div>
+          } @else if (network === 'tiktok') {
+            <div class="metric" title="Reproducciones">▶️ {{ (item.playCount || 0) | number }}</div>
+            <div class="metric" title="Compartidos">↪️ {{ (item.shareCount || 0) | number }}</div>
+          } @else {
+            <div class="metric" title="Interacciones">👍 {{ (item.likesCount || item.likes || 0) | number }}</div>
+            <div class="metric" title="Comentarios">💬 {{ (item.commentsCount || 0) | number }}</div>
+          }
+        </div>
+
+        @if (item.url) {
+          <a [href]="item.url" target="_blank" rel="noopener noreferrer" class="btn-link">Ver Original</a>
+        }
+      </div>
+    </article>
+  }
+
+  <!-- EMPTY STATE DEL GRID -->
+  @if (data.length === 0) {
+    <div class="grid-empty-state">
+      <p>No hay datos disponibles para mostrar en la cuadrícula.</p>
+    </div>
+  }
+</div>

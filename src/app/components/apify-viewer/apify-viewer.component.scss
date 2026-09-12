@@ -1,0 +1,236 @@
+// src/app/components/apify-viewer/apify-viewer.component.scss
+
+// Contenedor principal de la aplicación (100% del alto de la pantalla)
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+  font-family: "Lato", -apple-system, sans-serif;
+  background-color: #f3f4f6; // Fondo gris ultra claro para contraste
+  color: #1f2937;
+}
+
+// ==========================================
+// 1. PANEL LATERAL (SIDEBAR)
+// ==========================================
+.sidebar-controls {
+  width: 320px;
+  min-width: 320px;
+  background-color: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.03);
+  z-index: 10;
+
+  .brand-header {
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 1.5rem;
+    margin-bottom: 0.5rem;
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 0 0 0.25rem;
+      color: #111827;
+    }
+    p {
+      font-size: 0.875rem;
+      color: #6b7280;
+      margin: 0;
+    }
+  }
+
+  // Estilos limpios para formularios
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    label {
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: #374151;
+    }
+
+    .form-input {
+      padding: 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      width: 100%;
+      outline: none;
+      background-color: #f9fafb;
+      transition: all 0.2s ease;
+
+      &:focus {
+        border-color: #3ecf8e;
+        background-color: #ffffff;
+        box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.15);
+      }
+    }
+  }
+
+  // Botones de radio personalizados
+  .radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: #f9fafb;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      color: #4b5563;
+      transition: color 0.2s;
+
+      &:hover { color: #111827; }
+
+      input[type="radio"] {
+        accent-color: #3ecf8e;
+        width: 1.1rem;
+        height: 1.1rem;
+        cursor: pointer;
+      }
+    }
+  }
+
+  .btn-block {
+    width: 100%;
+    margin-top: auto; // Empuja el botón hacia abajo si hay espacio
+  }
+}
+
+// Botón de acción principal
+.btn-primary {
+  background-color: #3ecf8e;
+  color: #064e3b;
+  font-weight: 600;
+  padding: 0.875rem;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1rem;
+
+  &:hover:not(:disabled) {
+    background-color: #2fac77;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(62, 207, 142, 0.3);
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: #d1d5db;
+    color: #6b7280;
+  }
+}
+
+// ==========================================
+// 2. ÁREA PRINCIPAL (RESULTADOS)
+// ==========================================
+.dashboard-content {
+  flex: 1;
+  padding: 2rem 3rem;
+  overflow-y: auto; // Permite scroll independiente del sidebar
+
+  .results-header {
+    margin-bottom: 2rem;
+    h3 {
+      font-size: 1.5rem;
+      color: #111827;
+      margin: 0 0 0.5rem;
+    }
+    p {
+      color: #6b7280;
+      margin: 0;
+      font-size: 0.95rem;
+    }
+  }
+
+  .results-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  // Tarjetas para visualizar los datos actuales (JSON)
+  .data-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    overflow-x: auto;
+
+    pre {
+      font-size: 0.85rem;
+      color: #1f2937;
+      margin: 0;
+      code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    }
+  }
+}
+
+// ==========================================
+// 3. UX: ESTADOS (CARGA, ERROR Y VACÍO)
+// ==========================================
+.alert-error {
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 1.25rem;
+  border-radius: 0.5rem;
+  border-left: 4px solid #ef4444;
+  margin-bottom: 1.5rem;
+}
+
+.loading-state, .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 70vh;
+  color: #6b7280;
+  text-align: center;
+
+  h3 { color: #374151; margin-bottom: 0.5rem; }
+  p { max-width: 400px; margin: 0 auto; line-height: 1.5; }
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.9;
+}
+
+// Spinner nativo CSS
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #3ecf8e;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1.5rem;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+// Animación de entrada suave para el campo URL
+.fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
