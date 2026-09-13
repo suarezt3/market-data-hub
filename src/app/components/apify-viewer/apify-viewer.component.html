@@ -192,22 +192,33 @@
                 <div style="flex: 1; overflow: hidden;">
                   <div style="font-weight: 700; color: #374151; font-size: 0.95rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ comp.name }}</div>
 
-                  <!-- FIX: Etiquetas dinámicas según el dominio de la red social -->
                   <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem;">
 
+                    <!-- 1. SEGUIDORES (Comunidad general) -->
                     <span style="background: #eff6ff; color: #1d4ed8; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bfdbfe; white-space: nowrap;">
-                      👥 {{ comp.followersStr }} {{ loadedNetwork() === 'youtube' ? 'Subs' : 'Segs' }}
+                      👥 {{ comp.followersStr }} {{ loadedNetwork() === 'youtube' ? 'Subs' : (loadedNetwork() === 'omnicanal' ? 'Comunidad' : 'Segs') }}
                     </span>
 
-                    @if (comp.accountLikes > 0) {
-                      <span style="background: #fff1f2; color: #be123c; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #fecdd3; white-space: nowrap;">
-                        {{ loadedNetwork() === 'youtube' ? '👁️' : '❤️' }} {{ comp.likesStr }} {{ loadedNetwork() === 'youtube' ? 'Vistas' : 'Likes' }}
+                    <!-- 2. VISTAS (Píldora morada dedicada, ideal para YouTube o sumatoria Omnicanal) -->
+                    @if (comp.accountViews > 0) {
+                      <span style="background: #fdf4ff; color: #a21caf; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #fbcfe8; white-space: nowrap;">
+                        👁️ {{ comp.viewsStr }} Vistas
                       </span>
                     }
 
-                    <span style="background: #f0fdf4; color: #15803d; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bbf7d0; white-space: nowrap;">
-                      {{ loadedNetwork() === 'youtube' ? '▶️' : '📝' }} {{ comp.postsStr }} {{ loadedNetwork() === 'youtube' ? 'Videos' : 'Posts' }}
-                    </span>
+                    <!-- 3. LIKES (Píldora roja dedicada, si viene en 0 desaparece) -->
+                    @if (comp.accountLikes > 0) {
+                      <span style="background: #fff1f2; color: #be123c; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #fecdd3; white-space: nowrap;">
+                        ❤️ {{ comp.likesStr }} Likes
+                      </span>
+                    }
+
+                    <!-- 4. POSTS / VIDEOS (Si es 0 desaparece automáticamente) -->
+                    @if (comp.accountPosts > 0) {
+                      <span style="background: #f0fdf4; color: #15803d; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bbf7d0; white-space: nowrap;">
+                        {{ loadedNetwork() === 'youtube' ? '▶️' : '📝' }} {{ comp.postsStr }} {{ loadedNetwork() === 'youtube' ? 'Videos' : (loadedNetwork() === 'omnicanal' ? 'Publicaciones' : 'Posts') }}
+                      </span>
+                    }
 
                   </div>
                 </div>

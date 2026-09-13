@@ -24,19 +24,20 @@ export class ApifyChartService {
   // NORMALIZADOR ESCALABLE (MATRIZ DE MARCAS LATAM)
   // ==========================================
   private readonly BRAND_DICTIONARY: BrandConfig[] = [
-    { id: 'hills', name: "Hill's Pet Nutrition", keywords: ['hill', 'science diet'] },
+    { id: 'hills', name: "Hill's Pet Nutrition", keywords: ['hill', 'science diet', 'hillspet'] },
     { id: 'purina', name: 'Purina Pro Plan', keywords: ['pro plan', 'proplan', 'purina'] },
     { id: 'royal', name: 'Royal Canin', keywords: ['royal canin', 'royalcanin'] },
     { id: 'nupec', name: 'Nupec', keywords: ['nupec'] },
     { id: 'agility', name: 'Agility Gold', keywords: ['agility'] },
     { id: 'chunky', name: 'Chunky Mascotas', keywords: ['chunky'] },
     { id: 'pets_table', name: "Pet's Table", keywords: ["pet's table", 'pets table'] },
-    { id: 'virbac', name: 'Virbac', keywords: ['virbac'] },
-    { id: 'bonnat', name: 'Bonnat', keywords: ['bonnat'] },
+    // FIX: Agregamos keywords ampliadas para asegurar que atrape a Virbac y Bonnat en cualquier red
+    { id: 'virbac', name: 'Virbac', keywords: ['virbac', 'virbaccolombia'] },
+    { id: 'bonnat', name: 'Bonnat', keywords: ['bonnat', 'bonnatpets', 'bonnatpetscol'] },
     { id: 'true_blue', name: 'True Blue', keywords: ['true blue', 'trueblue'] },
     { id: 'brit', name: 'Brit', keywords: ['brit'] },
     { id: 'bravery', name: 'Bravery', keywords: ['bravery'] },
-    { id: 'b2b_media', name: 'Medios y Eventos B2B', keywords: ['pet industry', 'smartdogs', 'congreso', 'cvdc', 'balance dogs', 'orbit'] }
+    { id: 'b2b_media', name: 'Medios y Eventos B2B', keywords: ['pet industry', 'smartdogs', 'congreso', 'cvdc', 'balance dogs', 'orbit', 'familia_smartdogs'] }
   ];
 
   public getNormalizedBrandName(item: any): string {
@@ -74,7 +75,6 @@ export class ApifyChartService {
     return rawDate ? new Date(rawDate) : new Date();
   }
 
-  // FIX: Extracción corregida para leer desde la raíz del objeto en TikTok
   private getMetricValue(item: any, network: string, metric: ChartMetric): number {
     if (metric === 'views') {
       if (network === 'instagram') return item.videoPlayCount || item.videoViewCount || item.playCount || item.viewsCount || 0;
@@ -90,7 +90,6 @@ export class ApifyChartService {
       return item.commentsCount || item.commentCount || item.comments || 0;
     }
 
-    // Engagement Total
     if (network === 'youtube') return item.viewCount || 0;
     if (network === 'tiktok') {
       const likes = item.diggCount || item.stats?.diggCount || item.videoMeta?.diggCount || 0;

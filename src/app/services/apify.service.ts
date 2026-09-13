@@ -6,19 +6,18 @@ import { map, catchError } from 'rxjs/operators';
 
 export type ApifyAction = 'run' | 'get-latest' | 'list-runs' | 'get-run-data';
 
-// 1. ACTUALIZACIÓN: Agregamos actorId para identificar de qué red social es cada historial
 export interface ApifyRunRecord {
   id: string;
   status: string;
   startedAt: string;
   finishedAt: string;
   usageTotalUsd: number;
-  actorId: string; // <-- Nueva propiedad mapeada desde el Backend
+  actorId: string;
 }
 
 export interface ApifyPayload {
   action?: ApifyAction;
-  actorId?: string; // Lo hacemos opcional porque 'list-runs' global ya no lo exige estrictamente
+  actorId?: string;
   inputPayload?: Record<string, any>;
   runId?: string;
 }
@@ -36,7 +35,8 @@ export interface ApifyResponse<T = any> {
 })
 export class ApifyService {
   private http = inject(HttpClient);
-  // Reemplaza esto con la URL real de tu Edge Function si cambió, o mantenla igual
+
+  // URL de la Edge Function en Supabase
   private readonly EDGE_FUNCTION_URL = 'https://mhfablbqwbjjgkmoyipd.supabase.co/functions/v1/apify-runner';
 
   executeScraper<T = any>(payload: ApifyPayload): Observable<ApifyResponse<T>> {
@@ -59,39 +59,36 @@ export class ApifyService {
   }
 
   // ==========================================
-  // NUEVO: CARGA OMNICANAL EN PARALELO (MASTER GRAPH)
+  // CARGA OMNICANAL EN PARALELO (MASTER GRAPH)
   // ==========================================
   getOmnichannelLatestData(): Observable<any[]> {
+
+    // FIX: Actualización de los IDs estáticos por los nuevos scrapers de Perfiles y Páginas.
+    // Esto asegura que Supabase traiga las ejecuciones que realmente contienen los Seguidores/Suscriptores.
     const actors = [
-      { net: 'facebook', id: 'apify/facebook-posts-scraper' },
-      { net: 'instagram', id: 'apify/instagram-scraper' },
-      { net: 'tiktok', id: 'clockworks/tiktok-scraper' },
-      { net: 'youtube', id: 'streamers/youtube-scraper' }
+      { net: 'facebook', id: '4Hv5RhChiaDk6iwad' },       // Scraper de Páginas de FB
+      { net: 'tiktok', id: '0FXVyOXXEmdGcV88a' },         // Scraper de Perfiles de TikTok
+      { net: 'instagram', id: 'apify/instagram-scraper' },// Scraper de Perfiles de Instagram
+      { net: 'youtube', id: 'streamers/youtube-scraper' } // Scraper de Canales de YouTube
     ];
 
-    // Creamos un array de peticiones HTTP (Observables)
     const requests = actors.map(actor =>
       this.executeScraper({ action: 'get-latest', actorId: actor.id }).pipe(
         map(response => {
           if (response.success && Array.isArray(response.data)) {
-            // Etiquetamos cada registro con su red de origen para el Master Graph
             return response.data.map(item => ({ ...item, __network: actor.net }));
           }
           return [];
         }),
         catchError(err => {
-          // Resiliencia: Si un scraper falla, devolvemos un array vacío para esa red
-          // y evitamos que el forkJoin completo colapse.
           console.error(`[ApifyService] Error cargando data de ${actor.net}:`, err);
           return of([]);
         })
       )
     );
 
-    // forkJoin ejecuta las 4 peticiones al mismo tiempo
     return forkJoin(requests).pipe(
-      map(results => results.flat()) // Combina los 4 arrays resultantes en un megadataset
+      map(results => results.flat())
     );
   }
 }
-
