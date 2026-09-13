@@ -21,8 +21,9 @@ export class ApifyRunsTableComponent {
   getActorFriendlyName(actorId: string): string {
     const platformMapping: Record<string, string> = {
       // Facebook
-      'KoJrdxJCTtpon81KY': 'Facebook (Páginas)',
-      'apify/facebook-posts-scraper': 'Facebook (Páginas)',
+      'KoJrdxJCTtpon81KY': 'Facebook (Posts)',
+      'apify/facebook-posts-scraper': 'Facebook (Posts)',
+      '4Hv5RhChiaDk6iwad': 'Facebook (Páginas)', // <--- FIX: Agregamos el nuevo scraper
 
       // Instagram
       'shu8hvrXbJbY3Eb9W': 'Instagram (Perfiles)',
@@ -42,7 +43,6 @@ export class ApifyRunsTableComponent {
     return platformMapping[actorId] || actorId;
   }
 
-  // FIX: Renombrado de onSelectRun a onRowClick para coincidir con tu HTML
   onRowClick(runId: string, actorId: string) {
     this.runSelected.emit({ runId, actorInternalId: actorId });
   }
