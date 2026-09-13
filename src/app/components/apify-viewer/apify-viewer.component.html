@@ -176,8 +176,14 @@
             @for (comp of competitorsKpi(); track comp.name) {
               <div class="kpi-card" style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
 
+                <!-- FIX: Patrón "Graceful Degradation" para atrapar Error 403 de Instagram y mostrar la inicial -->
                 @if (comp.avatar) {
-                  <img [src]="comp.avatar" referrerpolicy="no-referrer" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 1px solid #e5e7eb;" alt="Logo">
+                  <img #avatarImg [src]="comp.avatar" referrerpolicy="no-referrer"
+                       (error)="avatarImg.style.display='none'; fallbackAvatar.style.display='flex'"
+                       style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 1px solid #e5e7eb;" alt="Logo">
+                  <div #fallbackAvatar style="display: none; width: 44px; height: 44px; border-radius: 50%; background: #e0e7ff; align-items: center; justify-content: center; font-size: 1.1rem; color: #4338ca; font-weight: bold;">
+                    {{ comp.name.charAt(0) | uppercase }}
+                  </div>
                 } @else {
                   <div style="width: 44px; height: 44px; border-radius: 50%; background: #e0e7ff; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #4338ca; font-weight: bold;">
                     {{ comp.name.charAt(0) | uppercase }}
@@ -187,7 +193,6 @@
                 <div style="flex: 1; overflow: hidden;">
                   <div style="font-weight: 700; color: #374151; font-size: 0.95rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ comp.name }}</div>
 
-                  <!-- FIX: Badges ultra-compactos con white-space: nowrap usando los nuevos Strings formateados -->
                   <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem;">
 
                     <span style="background: #eff6ff; color: #1d4ed8; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bfdbfe; white-space: nowrap;">
@@ -211,7 +216,7 @@
           </div>
         }
 
-        <!-- 3. Evolución en el tiempo (Movida a la primera fila, sin forzar grid-column full width) -->
+        <!-- 3. Evolución en el tiempo -->
         @if (chartOptions() && loadedNetwork() !== 'omnicanal') {
           <div class="chart-card" style="min-height: 380px;">
             <div echarts [options]="chartOptions()!" style="height: 100%; width: 100%;"></div>

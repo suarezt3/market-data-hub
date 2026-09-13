@@ -5,82 +5,105 @@
 
     <article class="media-card fade-in">
 
-      <!-- 1. HEADER: Miniatura Dinámica y Duración Unificada -->
+      <!-- 1. HEADER: Media Render Avanzado y Optimizado -->
       <div class="card-header">
-        @if (getMediaThumbnail(item)) {
-          <!-- FIX: referrerpolicy="no-referrer" bloquea el rastreo y evita el Error 403 de Meta -->
-          <img [src]="getMediaThumbnail(item)"
-               [alt]="getPostTitle(item)"
+
+        <!-- FIX: Optimización de rendimiento (preload="none") y asignación de [poster] para evitar el fondo negro -->
+        @if (itemNetwork === 'instagram' && item.videoUrl) {
+          <video
+            [src]="item.videoUrl"
+            [poster]="item.displayUrl || item.thumbnailUrl"
+            class="thumbnail"
+            muted
+            loop
+            playsinline
+            preload="none"
+            onmouseover="this.play()"
+            onmouseout="this.pause()"
+            referrerpolicy="no-referrer"
+            #igVideo
+            (error)="igVideo.style.display='none'; fallbackPost.style.display='flex'"
+            style="object-fit: cover; background: #f3f4f6;">
+          </video>
+        }
+        <!-- Flujo normal para fotos o portadas de TikTok/YouTube -->
+        @else if (item.displayUrl || item.videoMeta?.coverUrl || item.coverUrl || item.thumbnailUrl) {
+          <img #postImg
+               [src]="item.displayUrl || item.videoMeta?.coverUrl || item.coverUrl || item.thumbnailUrl"
+               [alt]="item.caption || item.text || item.title || 'Contenido Visual'"
                class="thumbnail"
                referrerpolicy="no-referrer"
-               (error)="handleImageError($event, getYouTubeId(item.url))">
+               (error)="postImg.style.display='none'; fallbackPost.style.display='flex'">
+        }
 
-          <!-- Insignia de duración inteligente -->
-          @if (getFormattedDuration(item)) {
-            <span class="duration-badge">{{ getFormattedDuration(item) }}</span>
-          } @else if (item.isVideo || item.type === 'Video' || item.type === 'clips') {
-            <span class="duration-badge">▶ Video</span>
-          }
-        } @else {
-          <!-- Fallback elegante -->
-          <div class="placeholder-thumbnail">
-            <span class="network-icon">
-              {{ itemNetwork === 'tiktok' ? '🎵' : itemNetwork === 'instagram' ? '📸' : itemNetwork === 'youtube' ? '▶️' : itemNetwork === 'facebook' ? '👍' : '📊' }}
-            </span>
-            <span>{{ itemNetwork | titlecase }} Content</span>
-          </div>
+        <!-- Fallback elegante unificado (Se activa si falla el <video> o el <img>) -->
+        <div #fallbackPost class="placeholder-thumbnail" [style.display]="(!item.videoUrl && !item.displayUrl && !item.videoMeta?.coverUrl && !item.coverUrl && !item.thumbnailUrl) ? 'flex' : 'none'" style="flex-direction: column; background: #f3f4f6;">
+          <span class="network-icon" style="filter: grayscale(100%); opacity: 0.5;">
+            {{ itemNetwork === 'tiktok' ? '🎵' : itemNetwork === 'instagram' ? '📸' : '▶️' }}
+          </span>
+          <span style="font-size: 0.75rem; color: #6b7280; font-weight: 600;">Media Protegido</span>
+        </div>
+
+        <!-- Insignia de duración inteligente -->
+        @if (item.videoDuration || item.videoMeta?.duration) {
+          <span class="duration-badge">▶ Video</span>
+        } @else if (item.type === 'Video' || item.type === 'clips') {
+          <span class="duration-badge">▶ Video</span>
         }
 
         <!-- Etiqueta de plataforma en modo Omnicanal -->
         @if (network === 'omnicanal') {
            <div class="omnichannel-badge" [ngClass]="itemNetwork">
-             {{ itemNetwork === 'tiktok' ? '🎵 TikTok' : itemNetwork === 'instagram' ? '📸 Instagram' : itemNetwork === 'youtube' ? '▶️ YouTube' : '👍 Facebook' }}
+             {{ itemNetwork | titlecase }}
            </div>
         }
       </div>
 
       <!-- 2. BODY: Información del Contenido Normalizada -->
       <div class="card-body">
-        <div class="brand-badge">{{ getAuthorName(item) }}</div>
+        <div class="brand-badge">{{ item.ownerFullName || item.ownerUsername || item.authorMeta?.name || 'Marca' }}</div>
 
-        <h4 class="title" [title]="getPostTitle(item)">
-          {{ getPostTitle(item) | slice:0:70 }}
-          {{ getPostTitle(item).length > 70 ? '...' : '' }}
+        <h4 class="title" [title]="item.caption || item.text || item.title || 'Contenido visual'">
+          {{ (item.caption || item.text || item.title || 'Contenido visual sin texto descriptivo') | slice:0:70 }}
+          {{ (item.caption || item.text || item.title || '').length > 70 ? '...' : '' }}
         </h4>
 
         <div class="publish-date">
-          📅 {{ getPostDate(item) | date:'mediumDate' }}
+          📅 {{ (item.timestamp || item.createTimeISO || item.date) | date:'mediumDate' }}
         </div>
       </div>
 
       <!-- 3. FOOTER: Métricas Clave Dinámicas por Red Social -->
       <div class="card-footer">
         <div class="metrics">
-          @if (itemNetwork === 'youtube') {
-            <div class="metric" title="Vistas">👁️ {{ (item.viewCount || 0) | number }}</div>
-            <div class="metric" title="Likes">❤️ {{ (item.likes || 0) | number }}</div>
-          } @else if (itemNetwork === 'tiktok') {
-            <!-- FIX: Búsqueda profunda para métricas anidadas de TikTok -->
-            <div class="metric" title="Reproducciones">▶️ {{ (item.playCount || item.stats?.playCount || item.videoMeta?.playCount || 0) | number }}</div>
-            <div class="metric" title="Likes">❤️ {{ (item.diggCount || item.stats?.diggCount || item.videoMeta?.diggCount || 0) | number }}</div>
-            <div class="metric" title="Comentarios">💬 {{ (item.commentCount || item.stats?.commentCount || item.videoMeta?.commentCount || 0) | number }}</div>
-          } @else if (itemNetwork === 'facebook') {
-            <div class="metric" title="Likes">👍 {{ (item.likes || item.reactionLikeCount || 0) | number }}</div>
-            <div class="metric" title="Comentarios">💬 {{ (item.comments || item.topComments?.length || 0) | number }}</div>
-          } @else if (itemNetwork === 'instagram') {
-            @if (item.videoPlayCount || item.videoViewCount || item.playCount) {
-              <div class="metric" title="Reproducciones">▶️ {{ (item.videoPlayCount || item.videoViewCount || item.playCount || 0) | number }}</div>
+          @if (itemNetwork === 'instagram') {
+            @if (item.videoViewCount || item.videoPlayCount || item.playCount) {
+              <div class="metric" title="Reproducciones">▶️ {{ (item.videoViewCount || item.videoPlayCount || item.playCount || 0) | number }}</div>
             }
             <div class="metric" title="Likes">❤️ {{ (item.likesCount || 0) | number }}</div>
             <div class="metric" title="Comentarios">💬 {{ (item.commentsCount || 0) | number }}</div>
+
+          } @else if (itemNetwork === 'tiktok') {
+            <div class="metric" title="Reproducciones">▶️ {{ (item.playCount || 0) | number }}</div>
+            <div class="metric" title="Likes">❤️ {{ (item.diggCount || 0) | number }}</div>
+            <div class="metric" title="Comentarios">💬 {{ (item.commentCount || 0) | number }}</div>
+
+          } @else if (itemNetwork === 'facebook') {
+            <div class="metric" title="Likes">👍 {{ (item.likes || item.reactionLikeCount || 0) | number }}</div>
+            <div class="metric" title="Comentarios">💬 {{ (item.comments || item.topComments?.length || 0) | number }}</div>
+
+          } @else if (itemNetwork === 'youtube') {
+            <div class="metric" title="Vistas">👁️ {{ (item.viewCount || 0) | number }}</div>
+            <div class="metric" title="Likes">❤️ {{ (item.likes || 0) | number }}</div>
+
           } @else {
             <div class="metric" title="Interacciones">❤️ {{ (item.likesCount || item.likes || 0) | number }}</div>
             <div class="metric" title="Comentarios">💬 {{ (item.commentsCount || item.comments || 0) | number }}</div>
           }
         </div>
 
-        @if (item.url || item.webVideoUrl) {
-          <a [href]="item.url || item.webVideoUrl" target="_blank" rel="noopener noreferrer" class="btn-link">Ver Original</a>
+        @if (item.url || item.webVideoUrl || item.externalUrl) {
+          <a [href]="item.url || item.webVideoUrl || item.externalUrl" target="_blank" rel="noopener noreferrer" class="btn-link">Ver Original</a>
         }
       </div>
     </article>
