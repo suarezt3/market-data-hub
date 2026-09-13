@@ -168,9 +168,23 @@
         <!-- 2. Tarjetas de Competidores (Kpis) -->
         @if (competitorsKpi().length > 0) {
           <div class="chart-card kpi-container" style="display: flex; flex-direction: column; gap: 1rem; overflow-y: auto;">
-            <div style="margin-bottom: 0.2rem;">
-              <h4 style="margin: 0; font-size: 1.1rem; color: #111827;">Comunidad de Marca</h4>
-              <p style="margin: 0; font-size: 0.85rem; color: #6b7280;">Métricas consolidadas por competidor</p>
+
+            <!-- NUEVO: HEADER CON CONTROLES DE ORDENAMIENTO -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.2rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <h4 style="margin: 0; font-size: 1.1rem; color: #111827;">Comunidad de Marca</h4>
+                <p style="margin: 0; font-size: 0.85rem; color: #6b7280;">Métricas consolidadas por competidor</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.4rem; background: #f9fafb; padding: 0.2rem 0.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb;">
+                <label style="font-size: 0.75rem; color: #4b5563; font-weight: 600; margin: 0;">Ordenar por:</label>
+                <select (change)="changeKpiSort($any($event.target).value)"
+                        style="border: none; background: transparent; font-size: 0.8rem; color: #111827; cursor: pointer; outline: none; font-weight: 500;">
+                  <option value="followers">👥 Mayor Comunidad</option>
+                  <option value="views">👁️ Más Vistas</option>
+                  <option value="likes">❤️ Más Likes</option>
+                  <option value="posts">📝 Más Publicaciones</option>
+                </select>
+              </div>
             </div>
 
             @for (comp of competitorsKpi(); track comp.name) {
@@ -194,26 +208,26 @@
 
                   <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem;">
 
-                    <!-- 1. SEGUIDORES (Comunidad general) -->
+                    <!-- 1. SEGUIDORES -->
                     <span style="background: #eff6ff; color: #1d4ed8; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bfdbfe; white-space: nowrap;">
                       👥 {{ comp.followersStr }} {{ loadedNetwork() === 'youtube' ? 'Subs' : (loadedNetwork() === 'omnicanal' ? 'Comunidad' : 'Segs') }}
                     </span>
 
-                    <!-- 2. VISTAS (Píldora morada dedicada, ideal para YouTube o sumatoria Omnicanal) -->
+                    <!-- 2. VISTAS -->
                     @if (comp.accountViews > 0) {
                       <span style="background: #fdf4ff; color: #a21caf; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #fbcfe8; white-space: nowrap;">
                         👁️ {{ comp.viewsStr }} Vistas
                       </span>
                     }
 
-                    <!-- 3. LIKES (Píldora roja dedicada, si viene en 0 desaparece) -->
+                    <!-- 3. LIKES -->
                     @if (comp.accountLikes > 0) {
                       <span style="background: #fff1f2; color: #be123c; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #fecdd3; white-space: nowrap;">
                         ❤️ {{ comp.likesStr }} Likes
                       </span>
                     }
 
-                    <!-- 4. POSTS / VIDEOS (Si es 0 desaparece automáticamente) -->
+                    <!-- 4. POSTS / VIDEOS -->
                     @if (comp.accountPosts > 0) {
                       <span style="background: #f0fdf4; color: #15803d; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bbf7d0; white-space: nowrap;">
                         {{ loadedNetwork() === 'youtube' ? '▶️' : '📝' }} {{ comp.postsStr }} {{ loadedNetwork() === 'youtube' ? 'Videos' : (loadedNetwork() === 'omnicanal' ? 'Publicaciones' : 'Posts') }}

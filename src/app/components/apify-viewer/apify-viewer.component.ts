@@ -10,6 +10,8 @@ import { ApifyChartService, ChartMetric } from '../../services/apify-chart.servi
 import { ApifyDataGridComponent } from '../apify-data-grid/apify-data-grid.component';
 import { ApifyRunsTableComponent } from '../apify-runs-table/apify-runs-table.component';
 
+export type KpiSortOption = 'followers' | 'views' | 'likes' | 'posts';
+
 @Component({
   selector: 'app-apify-viewer',
   standalone: true,
@@ -41,6 +43,9 @@ export class ApifyViewerComponent {
   masterChartOptions = signal<EChartsOption | null>(null);
 
   selectedMetric = signal<ChartMetric>('total');
+
+  // NUEVA SEÑAL: Controla el ordenamiento de la tarjeta de Comunidad de Marca
+  kpiSortMetric = signal<KpiSortOption>('followers');
 
   // ==========================================
   // LÓGICA COMPUTADA AVANZADA (MOTOR KPI INTELIGENTE)
@@ -83,7 +88,6 @@ export class ApifyViewerComponent {
       const net = item.__network || 'unknown';
       let avatar = item.ownerProfilePicUrl || item.channelAvatarUrl || item.authorMeta?.avatar || item.user?.profilePic || item.user?.profile_pic_url || item.author?.profilePicture || item.profilePicUrl || item.pageProfilePic || item.avatarUrl || null;
 
-      // Extraemos la capa _kpi construida en standardizeData
       const kpi = item._kpi || { followers: 0, profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, posts: 0 };
 
       if (!brandNetworkStats.has(brand)) brandNetworkStats.set(brand, {});
@@ -101,13 +105,11 @@ export class ApifyViewerComponent {
         };
       } else {
         const ex = networkMap[net];
-        // Métricas de Perfil: Nos quedamos con el valor histórico más alto (MAX)
         ex.followers = Math.max(ex.followers, kpi.followers);
         ex.profileLikes = Math.max(ex.profileLikes, kpi.profileLikes);
         ex.profileViews = Math.max(ex.profileViews, kpi.profileViews);
         ex.posts = Math.max(ex.posts, kpi.posts);
 
-        // Métricas Proxy de Post: Acumulamos iterativamente (SUM)
         ex.postLikesSum += kpi.postLikes;
         ex.postViewsSum += kpi.postViews;
 
@@ -116,6 +118,7 @@ export class ApifyViewerComponent {
     });
 
     const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+    const sortMetric = this.kpiSortMetric();
 
     return Array.from(brandNetworkStats.entries())
       .map(([brandName, networkMap]) => {
@@ -127,7 +130,6 @@ export class ApifyViewerComponent {
 
         Object.values(networkMap).forEach(stats => {
           totalFollowers += stats.followers;
-          // Priorizamos las métricas de perfil. Si no existen (ej: IG/TikTok views), usamos la sumatoria proxy
           totalLikes += (stats.profileLikes > 0 ? stats.profileLikes : stats.postLikesSum);
           totalViews += (stats.profileViews > 0 ? stats.profileViews : stats.postViewsSum);
           totalPosts += stats.posts;
@@ -147,7 +149,13 @@ export class ApifyViewerComponent {
           postsStr: compactFormatter.format(totalPosts)
         };
       })
-      .sort((a, b) => b.followers - a.followers);
+      // FIX: Ordenamiento dinámico basado en la señal kpiSortMetric
+      .sort((a, b) => {
+        if (sortMetric === 'views') return b.accountViews - a.accountViews;
+        if (sortMetric === 'likes') return b.accountLikes - a.accountLikes;
+        if (sortMetric === 'posts') return b.accountPosts - a.accountPosts;
+        return b.followers - a.followers; // Default: Comunidad
+      });
   });
 
   selectedNetwork = signal<string>('tiktok');
@@ -165,9 +173,6 @@ export class ApifyViewerComponent {
     'youtube': 'streamers/youtube-scraper'
   };
 
-  // ==========================================
-  // INFERENCIA FUERTE DE RED Y FLATTENING
-  // ==========================================
   private standardizeData(rawData: any[], fallbackNetwork: string): any[] {
     let processed: any[] = [];
 
@@ -185,6 +190,8 @@ export class ApifyViewerComponent {
 
       if (net === 'instagram' && (item.latestPosts || item.latestIgtvVideos)) {
         const allPosts = [...(item.latestPosts || []), ...(item.latestIgtvVideos || [])];
+        const totalRecentViews = allPosts.reduce((sum, p) => sum + (p.videoViewCount || p.videoPlayCount || p.playCount || p.viewsCount || 0), 0);
+
         allPosts.forEach((post: any) => {
           processed.push({
             ...post,
@@ -192,7 +199,6 @@ export class ApifyViewerComponent {
             ownerUsername: item.username,
             ownerProfilePicUrl: item.profilePicUrlHD || item.profilePicUrl,
             __network: 'instagram',
-            // Nueva Capa Estándar de KPIs
             _kpi: {
               followers: item.followersCount || item.followsCount || 0,
               profileLikes: 0,
@@ -392,6 +398,11 @@ export class ApifyViewerComponent {
         this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(currentLoadedNetwork, currentData, metric));
       }
     }
+  }
+
+  // NUEVA FUNCIÓN: Para cambiar el orden desde la vista (HTML)
+  changeKpiSort(metric: KpiSortOption) {
+    this.kpiSortMetric.set(metric);
   }
 
   private resetState() {
