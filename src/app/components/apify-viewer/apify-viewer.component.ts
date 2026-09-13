@@ -43,7 +43,7 @@ export class ApifyViewerComponent {
   selectedMetric = signal<ChartMetric>('total');
 
   // ==========================================
-  // LÓGICA COMPUTADA AVANZADA (SUMATORIA ESTRICTA)
+  // LÓGICA COMPUTADA AVANZADA (MOTOR KPI INTELIGENTE)
   // ==========================================
 
   dynamicDateRange = computed(() => {
@@ -69,36 +69,49 @@ export class ApifyViewerComponent {
     const currentData = this.data();
     if (!currentData || currentData.length === 0) return [];
 
-    // Nuevo mapa que aisla Vistas (Views) de los Likes
-    const brandNetworkStats = new Map<string, Record<string, { followers: number, accountLikes: number, accountViews: number, accountPosts: number, avatar: string | null }>>();
+    const brandNetworkStats = new Map<string, Record<string, {
+      followers: number,
+      profileLikes: number, postLikesSum: number,
+      profileViews: number, postViewsSum: number,
+      posts: number, avatar: string | null
+    }>>();
 
     currentData.forEach(item => {
       const brand = this.apifyChartService.getNormalizedBrandName(item);
       if (brand === 'Embajadores / Creadores' || brand === 'Medios y Eventos B2B') return;
 
       const net = item.__network || 'unknown';
-
       let avatar = item.ownerProfilePicUrl || item.channelAvatarUrl || item.authorMeta?.avatar || item.user?.profilePic || item.user?.profile_pic_url || item.author?.profilePicture || item.profilePicUrl || item.pageProfilePic || item.avatarUrl || null;
-      let followers = item.ownerFollowers || item.followersCount || item.numberOfSubscribers || item.authorMeta?.fans || item.authorStats?.followerCount || item.user?.follower_count || item.pageLikes || item.followers || item.stats?.followerCount || 0;
-      let accountLikes = item.ownerAccountLikes || item.authorMeta?.heart || item.authorStats?.heartCount || item.totalLikes || item.user?.total_favorited || 0;
-      let accountViews = item.ownerAccountViews || item.channelTotalViews || 0;
-      let accountPosts = item.ownerPostsCount || item.authorMeta?.video || item.authorStats?.videoCount || item.postsCount || item.channelTotalVideos || item.user?.aweme_count || 0;
 
-      if (!brandNetworkStats.has(brand)) {
-        brandNetworkStats.set(brand, {});
-      }
+      // Extraemos la capa _kpi construida en standardizeData
+      const kpi = item._kpi || { followers: 0, profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, posts: 0 };
 
+      if (!brandNetworkStats.has(brand)) brandNetworkStats.set(brand, {});
       const networkMap = brandNetworkStats.get(brand)!;
 
       if (!networkMap[net]) {
-        networkMap[net] = { followers, accountLikes, accountViews, accountPosts, avatar };
+        networkMap[net] = {
+          followers: kpi.followers,
+          profileLikes: kpi.profileLikes,
+          postLikesSum: kpi.postLikes,
+          profileViews: kpi.profileViews,
+          postViewsSum: kpi.postViews,
+          posts: kpi.posts,
+          avatar
+        };
       } else {
-        const existing = networkMap[net];
-        if (followers > existing.followers) existing.followers = followers;
-        if (accountLikes > existing.accountLikes) existing.accountLikes = accountLikes;
-        if (accountViews > existing.accountViews) existing.accountViews = accountViews;
-        if (accountPosts > existing.accountPosts) existing.accountPosts = accountPosts;
-        if (avatar && !existing.avatar) existing.avatar = avatar;
+        const ex = networkMap[net];
+        // Métricas de Perfil: Nos quedamos con el valor histórico más alto (MAX)
+        ex.followers = Math.max(ex.followers, kpi.followers);
+        ex.profileLikes = Math.max(ex.profileLikes, kpi.profileLikes);
+        ex.profileViews = Math.max(ex.profileViews, kpi.profileViews);
+        ex.posts = Math.max(ex.posts, kpi.posts);
+
+        // Métricas Proxy de Post: Acumulamos iterativamente (SUM)
+        ex.postLikesSum += kpi.postLikes;
+        ex.postViewsSum += kpi.postViews;
+
+        if (avatar && !ex.avatar) ex.avatar = avatar;
       }
     });
 
@@ -112,12 +125,12 @@ export class ApifyViewerComponent {
         let totalPosts = 0;
         let finalAvatar: string | null = null;
 
-        // Sumatoria limpia sin que YouTube corrompa los likes
         Object.values(networkMap).forEach(stats => {
           totalFollowers += stats.followers;
-          totalLikes += stats.accountLikes;
-          totalViews += stats.accountViews;
-          totalPosts += stats.accountPosts;
+          // Priorizamos las métricas de perfil. Si no existen (ej: IG/TikTok views), usamos la sumatoria proxy
+          totalLikes += (stats.profileLikes > 0 ? stats.profileLikes : stats.postLikesSum);
+          totalViews += (stats.profileViews > 0 ? stats.profileViews : stats.postViewsSum);
+          totalPosts += stats.posts;
           if (stats.avatar && !finalAvatar) finalAvatar = stats.avatar;
         });
 
@@ -160,8 +173,6 @@ export class ApifyViewerComponent {
 
     rawData.forEach(item => {
       let net = item.__network;
-
-      // Inferencia agresiva basada en las llaves del JSON si la URL no está presente
       if (!net || net === 'omnicanal' || net === 'unknown') {
         const urlStr = String(item.url || item.facebookUrl || item.pageUrl || item.webVideoUrl || item.channelUrl || '').toLowerCase();
 
@@ -172,30 +183,26 @@ export class ApifyViewerComponent {
         else net = fallbackNetwork !== 'omnicanal' ? fallbackNetwork : 'unknown';
       }
 
-      if (net === 'instagram') {
-        if (item.latestPosts || item.latestIgtvVideos) {
-          const allPosts = [...(item.latestPosts || []), ...(item.latestIgtvVideos || [])];
-          allPosts.forEach((post: any) => {
-            processed.push({
-              ...post,
-              ownerFullName: item.fullName || item.username,
-              ownerUsername: item.username,
-              ownerProfilePicUrl: item.profilePicUrlHD || item.profilePicUrl,
-              ownerFollowers: item.followersCount || item.followsCount || 0,
-              ownerPostsCount: item.postsCount || 0,
-              ownerAccountLikes: 0,
-              ownerAccountViews: 0,
-              __network: 'instagram'
-            });
-          });
-        } else {
+      if (net === 'instagram' && (item.latestPosts || item.latestIgtvVideos)) {
+        const allPosts = [...(item.latestPosts || []), ...(item.latestIgtvVideos || [])];
+        allPosts.forEach((post: any) => {
           processed.push({
-            ...item,
-            ownerFullName: item.ownerFullName || item.fullName || item.username,
-            ownerFollowers: item.ownerFollowers || item.followersCount || 0,
-            __network: 'instagram'
+            ...post,
+            ownerFullName: item.fullName || item.username,
+            ownerUsername: item.username,
+            ownerProfilePicUrl: item.profilePicUrlHD || item.profilePicUrl,
+            __network: 'instagram',
+            // Nueva Capa Estándar de KPIs
+            _kpi: {
+              followers: item.followersCount || item.followsCount || 0,
+              profileLikes: 0,
+              postLikes: post.likesCount || post.likes || 0,
+              profileViews: 0,
+              postViews: post.videoViewCount || post.videoPlayCount || post.playCount || post.viewsCount || 0,
+              posts: item.postsCount || 0
+            }
           });
-        }
+        });
       }
       else if (net === 'tiktok') {
         processed.push({
@@ -203,12 +210,16 @@ export class ApifyViewerComponent {
           ownerFullName: item.authorMeta?.nickName || item.authorMeta?.name || item.author?.nickname,
           ownerUsername: item.authorMeta?.name || item.author?.uniqueId,
           ownerProfilePicUrl: item.authorMeta?.avatar || item.author?.avatarLarger,
-          ownerFollowers: item.authorMeta?.fans || item.authorStats?.followerCount || 0,
-          ownerAccountLikes: item.authorMeta?.heart || item.authorStats?.heartCount || 0,
-          ownerPostsCount: item.authorMeta?.video || item.authorStats?.videoCount || 0,
-          ownerAccountViews: 0,
           url: item.webVideoUrl || item.videoUrl || item.shareUrl,
-          __network: 'tiktok'
+          __network: 'tiktok',
+          _kpi: {
+             followers: item.authorMeta?.fans || item.authorStats?.followerCount || 0,
+             profileLikes: item.authorMeta?.heart || item.authorStats?.heartCount || 0,
+             postLikes: item.diggCount || item.stats?.diggCount || item.videoMeta?.diggCount || 0,
+             profileViews: 0,
+             postViews: item.playCount || item.stats?.playCount || item.videoMeta?.playCount || 0,
+             posts: item.authorMeta?.video || item.authorStats?.videoCount || 0
+          }
         });
       }
       else if (net === 'facebook') {
@@ -218,12 +229,12 @@ export class ApifyViewerComponent {
           ownerFullName: isPageScraper ? (item.title || item.pageName) : (item.user?.name || item.pageName),
           ownerUsername: item.pageName,
           ownerProfilePicUrl: isPageScraper ? item.profilePictureUrl : item.user?.profilePic,
-          ownerFollowers: isPageScraper ? (item.followers || item.likes || 0) : 0,
-          ownerAccountLikes: 0,
-          ownerAccountViews: 0,
-          ownerPostsCount: 0,
           url: isPageScraper ? (item.pageUrl || item.facebookUrl) : (item.url || item.facebookUrl),
-          __network: 'facebook'
+          __network: 'facebook',
+          _kpi: {
+             followers: isPageScraper ? (item.followers || item.likes || 0) : 0,
+             profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, posts: 0
+          }
         });
       }
       else if (net === 'youtube') {
@@ -232,15 +243,21 @@ export class ApifyViewerComponent {
           ownerFullName: item.channelName,
           ownerUsername: item.channelUsername,
           ownerProfilePicUrl: item.channelAvatarUrl,
-          ownerFollowers: item.numberOfSubscribers || 0,
-          ownerPostsCount: item.channelTotalVideos || 0,
-          ownerAccountViews: item.channelTotalViews || 0,
-          ownerAccountLikes: 0,
-          __network: 'youtube'
+          __network: 'youtube',
+          _kpi: {
+             followers: item.numberOfSubscribers || 0,
+             profileLikes: 0, postLikes: 0,
+             profileViews: item.channelTotalViews || 0, postViews: 0,
+             posts: item.channelTotalVideos || 0
+          }
         });
       }
       else {
-        processed.push({ ...item, __network: net });
+        processed.push({
+          ...item,
+          __network: net,
+          _kpi: { followers: item.followersCount || 0, profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, posts: item.postsCount || 0 }
+        });
       }
     });
 
