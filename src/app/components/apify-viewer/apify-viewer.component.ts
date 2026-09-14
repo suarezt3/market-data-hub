@@ -4,7 +4,10 @@ import { CommonModule, TitleCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
-import { ApifyService, ApifyPayload, ApifyAction, ApifyRunRecord } from '../../services/apify.service';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+
+import { ApifyService, ApifyPayload, ApifyAction, ApifyRunRecord, ApifyResponse } from '../../services/apify.service';
 import { ApifyChartService, ChartMetric } from '../../services/apify-chart.service';
 
 import { ApifyDataGridComponent } from '../apify-data-grid/apify-data-grid.component';
@@ -43,12 +46,10 @@ export class ApifyViewerComponent {
   masterChartOptions = signal<EChartsOption | null>(null);
 
   selectedMetric = signal<ChartMetric>('total');
-
-  // NUEVA SEÑAL: Controla el ordenamiento de la tarjeta de Comunidad de Marca
   kpiSortMetric = signal<KpiSortOption>('followers');
 
   // ==========================================
-  // LÓGICA COMPUTADA AVANZADA (MOTOR KPI INTELIGENTE)
+  // LÓGICA COMPUTADA AVANZADA (MOTOR KPI CORREGIDO)
   // ==========================================
 
   dynamicDateRange = computed(() => {
@@ -75,10 +76,9 @@ export class ApifyViewerComponent {
     if (!currentData || currentData.length === 0) return [];
 
     const brandNetworkStats = new Map<string, Record<string, {
-      followers: number,
-      profileLikes: number, postLikesSum: number,
+      followers: number, profileLikes: number, postLikesSum: number,
       profileViews: number, postViewsSum: number,
-      posts: number, avatar: string | null
+      profilePosts: number, postCountSum: number, avatar: string | null
     }>>();
 
     currentData.forEach(item => {
@@ -88,30 +88,28 @@ export class ApifyViewerComponent {
       const net = item.__network || 'unknown';
       let avatar = item.ownerProfilePicUrl || item.channelAvatarUrl || item.authorMeta?.avatar || item.user?.profilePic || item.user?.profile_pic_url || item.author?.profilePicture || item.profilePicUrl || item.pageProfilePic || item.avatarUrl || null;
 
-      const kpi = item._kpi || { followers: 0, profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, posts: 0 };
+      const kpi = item._kpi || { followers: 0, profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, profilePosts: 0, postCount: 0 };
 
       if (!brandNetworkStats.has(brand)) brandNetworkStats.set(brand, {});
       const networkMap = brandNetworkStats.get(brand)!;
 
       if (!networkMap[net]) {
         networkMap[net] = {
-          followers: kpi.followers,
-          profileLikes: kpi.profileLikes,
-          postLikesSum: kpi.postLikes,
-          profileViews: kpi.profileViews,
-          postViewsSum: kpi.postViews,
-          posts: kpi.posts,
-          avatar
+          followers: kpi.followers, profileLikes: kpi.profileLikes, postLikesSum: kpi.postLikes,
+          profileViews: kpi.profileViews, postViewsSum: kpi.postViews,
+          profilePosts: kpi.profilePosts, postCountSum: kpi.postCount, avatar
         };
       } else {
         const ex = networkMap[net];
         ex.followers = Math.max(ex.followers, kpi.followers);
         ex.profileLikes = Math.max(ex.profileLikes, kpi.profileLikes);
         ex.profileViews = Math.max(ex.profileViews, kpi.profileViews);
-        ex.posts = Math.max(ex.posts, kpi.posts);
+        ex.profilePosts = Math.max(ex.profilePosts, kpi.profilePosts);
 
+        // CORRECCIÓN: Sumatoria real de posts y métricas proxy
         ex.postLikesSum += kpi.postLikes;
         ex.postViewsSum += kpi.postViews;
+        ex.postCountSum += kpi.postCount;
 
         if (avatar && !ex.avatar) ex.avatar = avatar;
       }
@@ -122,39 +120,30 @@ export class ApifyViewerComponent {
 
     return Array.from(brandNetworkStats.entries())
       .map(([brandName, networkMap]) => {
-        let totalFollowers = 0;
-        let totalLikes = 0;
-        let totalViews = 0;
-        let totalPosts = 0;
+        let totalFollowers = 0, totalLikes = 0, totalViews = 0, totalPosts = 0;
         let finalAvatar: string | null = null;
 
         Object.values(networkMap).forEach(stats => {
           totalFollowers += stats.followers;
           totalLikes += (stats.profileLikes > 0 ? stats.profileLikes : stats.postLikesSum);
           totalViews += (stats.profileViews > 0 ? stats.profileViews : stats.postViewsSum);
-          totalPosts += stats.posts;
+          // CORRECCIÓN: Si no hay histórico de perfil, usamos la suma exacta de los posts extraídos
+          totalPosts += (stats.profilePosts > 0 ? stats.profilePosts : stats.postCountSum);
           if (stats.avatar && !finalAvatar) finalAvatar = stats.avatar;
         });
 
         return {
-          name: brandName,
-          avatar: finalAvatar,
-          followers: totalFollowers,
-          accountLikes: totalLikes,
-          accountViews: totalViews,
-          accountPosts: totalPosts,
-          followersStr: compactFormatter.format(totalFollowers),
-          likesStr: compactFormatter.format(totalLikes),
-          viewsStr: compactFormatter.format(totalViews),
-          postsStr: compactFormatter.format(totalPosts)
+          name: brandName, avatar: finalAvatar, followers: totalFollowers, accountLikes: totalLikes,
+          accountViews: totalViews, accountPosts: totalPosts,
+          followersStr: compactFormatter.format(totalFollowers), likesStr: compactFormatter.format(totalLikes),
+          viewsStr: compactFormatter.format(totalViews), postsStr: compactFormatter.format(totalPosts)
         };
       })
-      // FIX: Ordenamiento dinámico basado en la señal kpiSortMetric
       .sort((a, b) => {
         if (sortMetric === 'views') return b.accountViews - a.accountViews;
         if (sortMetric === 'likes') return b.accountLikes - a.accountLikes;
         if (sortMetric === 'posts') return b.accountPosts - a.accountPosts;
-        return b.followers - a.followers; // Default: Comunidad
+        return b.followers - a.followers;
       });
   });
 
@@ -200,12 +189,10 @@ export class ApifyViewerComponent {
             ownerProfilePicUrl: item.profilePicUrlHD || item.profilePicUrl,
             __network: 'instagram',
             _kpi: {
-              followers: item.followersCount || item.followsCount || 0,
-              profileLikes: 0,
-              postLikes: post.likesCount || post.likes || 0,
-              profileViews: 0,
+              followers: item.followersCount || item.followsCount || 0, profileLikes: 0,
+              postLikes: post.likesCount || post.likes || 0, profileViews: 0,
               postViews: post.videoViewCount || post.videoPlayCount || post.playCount || post.viewsCount || 0,
-              posts: item.postsCount || 0
+              profilePosts: item.postsCount || 0, postCount: 1
             }
           });
         });
@@ -224,22 +211,24 @@ export class ApifyViewerComponent {
              postLikes: item.diggCount || item.stats?.diggCount || item.videoMeta?.diggCount || 0,
              profileViews: 0,
              postViews: item.playCount || item.stats?.playCount || item.videoMeta?.playCount || 0,
-             posts: item.authorMeta?.video || item.authorStats?.videoCount || 0
+             profilePosts: item.authorMeta?.video || item.authorStats?.videoCount || 0, postCount: 1
           }
         });
       }
       else if (net === 'facebook') {
-        const isPageScraper = item.followers !== undefined || !!item.profilePictureUrl || !!item.pageName;
+        const isPost = !!item.postId || item.text !== undefined;
         processed.push({
           ...item,
-          ownerFullName: isPageScraper ? (item.title || item.pageName) : (item.user?.name || item.pageName),
+          ownerFullName: isPost ? (item.user?.name || item.pageName) : (item.title || item.pageName),
           ownerUsername: item.pageName,
-          ownerProfilePicUrl: isPageScraper ? item.profilePictureUrl : item.user?.profilePic,
-          url: isPageScraper ? (item.pageUrl || item.facebookUrl) : (item.url || item.facebookUrl),
+          ownerProfilePicUrl: isPost ? item.user?.profilePic : item.profilePictureUrl,
+          url: isPost ? (item.url || item.topLevelUrl) : (item.pageUrl || item.facebookUrl),
           __network: 'facebook',
           _kpi: {
-             followers: isPageScraper ? (item.followers || item.likes || 0) : 0,
-             profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, posts: 0
+             followers: isPost ? 0 : (item.followers || item.likes || 0),
+             profileLikes: 0, postLikes: isPost ? (item.likes || item.reactionLikeCount || 0) : 0,
+             profileViews: 0, postViews: isPost ? (item.viewsCount || item.videoPostViewCount || 0) : 0,
+             profilePosts: 0, postCount: isPost ? 1 : 0
           }
         });
       }
@@ -251,18 +240,16 @@ export class ApifyViewerComponent {
           ownerProfilePicUrl: item.channelAvatarUrl,
           __network: 'youtube',
           _kpi: {
-             followers: item.numberOfSubscribers || 0,
-             profileLikes: 0, postLikes: 0,
+             followers: item.numberOfSubscribers || 0, profileLikes: 0, postLikes: 0,
              profileViews: item.channelTotalViews || 0, postViews: 0,
-             posts: item.channelTotalVideos || 0
+             profilePosts: item.channelTotalVideos || 0, postCount: 0
           }
         });
       }
       else {
         processed.push({
-          ...item,
-          __network: net,
-          _kpi: { followers: item.followersCount || 0, profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, posts: item.postsCount || 0 }
+          ...item, __network: net,
+          _kpi: { followers: item.followersCount || 0, profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, profilePosts: item.postsCount || 0, postCount: 1 }
         });
       }
     });
@@ -279,28 +266,28 @@ export class ApifyViewerComponent {
 
     this.resetState();
     const network = this.selectedNetwork();
+    const action = this.actionType();
+
+    if (action === 'list-runs') {
+      this.fetchGlobalRunsHistory();
+      return;
+    }
+
+    if (network === 'facebook') {
+      this.fetchFacebookHybrid(action, rawUrls);
+      return;
+    }
 
     const payload: ApifyPayload = {
-      action: this.actionType(),
+      action: action,
       actorId: this.ACTORS_MAP[network],
-      ...(this.actionType() === 'run' ? { inputPayload: this.buildInputPayload(network, rawUrls) } : {})
+      ...(action === 'run' ? { inputPayload: this.buildInputPayload(network, rawUrls) } : {})
     };
 
     this.apifyService.executeScraper(payload).subscribe({
       next: (response) => {
         if (response.success && response.data) {
-          if (this.actionType() === 'list-runs') {
-            this.runsList.set(response.data as ApifyRunRecord[]);
-          } else {
-            const cleanData = this.standardizeData(response.data, network);
-            this.data.set(cleanData);
-            this.loadedNetwork.set(network);
-            this.selectedMetric.set('total');
-
-            this.chartOptions.set(this.apifyChartService.buildChartOptions(network, cleanData, 'total'));
-            this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(network, cleanData, 'total'));
-            this.performanceChartOptions.set(this.apifyChartService.buildPerformanceScatterChart(network, cleanData));
-          }
+          this.processDataset(response.data, network);
         } else {
           this.error.set('La ejecución finalizó sin datos.');
         }
@@ -310,8 +297,111 @@ export class ApifyViewerComponent {
     });
   }
 
+  // ==========================================
+  // RUTAS DE EXTRACCIÓN SEPARADAS Y LIMPIAS
+  // ==========================================
+
+  private fetchGlobalRunsHistory() {
+    this.apifyService.executeScraper({ action: 'list-runs' }).subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          const allRuns = response.data as ApifyRunRecord[];
+
+          // CORRECCIÓN: Filtramos usando los IDs internos reales de Supabase para evitar duplicados en la tabla
+          const fbPosts = allRuns.filter(r => r.actorId === 'KoJrdxJCTtpon81KY' || r.actorId === 'apify/facebook-posts-scraper');
+          const fbPages = allRuns.filter(r => r.actorId === '4Hv5RhChiaDk6iwad' || r.actorId === 'apify/facebook-pages-scraper');
+
+          const otherRuns = allRuns.filter(r =>
+            r.actorId !== 'KoJrdxJCTtpon81KY' && r.actorId !== 'apify/facebook-posts-scraper' &&
+            r.actorId !== '4Hv5RhChiaDk6iwad' && r.actorId !== 'apify/facebook-pages-scraper'
+          );
+
+          const finalRuns = [...otherRuns];
+
+          // Creamos UNA SOLA fila limpia para Facebook
+          if (fbPosts.length > 0 || fbPages.length > 0) {
+            const latestPost = fbPosts[0] || null;
+            const latestPage = fbPages[0] || null;
+
+            finalRuns.push({
+              id: `HYBRID|${latestPost?.id || 'none'}|${latestPage?.id || 'none'}`,
+              actorId: 'Facebook (Consolidado)', // Muestra un nombre limpio en la tabla
+              status: (latestPost?.status === 'SUCCEEDED' || latestPage?.status === 'SUCCEEDED') ? 'SUCCEEDED' : 'FAILED',
+              startedAt: latestPost?.startedAt || latestPage?.startedAt || new Date().toISOString(),
+              finishedAt: latestPost?.finishedAt || latestPage?.finishedAt || new Date().toISOString(),
+              usageTotalUsd: (latestPost?.usageTotalUsd || 0) + (latestPage?.usageTotalUsd || 0)
+            });
+          }
+
+          finalRuns.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+          this.runsList.set(finalRuns);
+        } else {
+          this.error.set('No se pudo recuperar el historial de ejecuciones.');
+        }
+        this.isLoading.set(false);
+      },
+      error: (err) => { this.error.set(err.message); this.isLoading.set(false); }
+    });
+  }
+
+  private fetchFacebookHybrid(action: ApifyAction, urls: string[]) {
+    const postsActor = 'apify/facebook-posts-scraper';
+    const pagesActor = '4Hv5RhChiaDk6iwad';
+
+    const payloadPosts: ApifyPayload = { action, actorId: postsActor, ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-posts', urls) } : {}) };
+    const payloadPages: ApifyPayload = { action, actorId: pagesActor, ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-pages', urls) } : {}) };
+
+    const req1 = this.apifyService.executeScraper(payloadPosts).pipe(catchError(() => of({ success: true, data: [] } as ApifyResponse)));
+    const req2 = this.apifyService.executeScraper(payloadPages).pipe(catchError(() => of({ success: true, data: [] } as ApifyResponse)));
+
+    forkJoin([req1, req2]).subscribe(([res1, res2]) => {
+      const combinedData = [...(res1.data || []), ...(res2.data || [])];
+      if (combinedData.length > 0) {
+        this.processDataset(combinedData, 'facebook');
+      } else {
+        this.error.set('La ejecución finalizó sin datos.');
+      }
+      this.isLoading.set(false);
+    });
+  }
+
   loadSpecificRun(runId: string, actorInternalId: string) {
     this.resetState();
+
+    // INTERCEPTOR: Si el ID de la fila indica que es el Consolidado Híbrido, cruza la data
+    if (runId.startsWith('HYBRID|')) {
+      const parts = runId.split('|');
+      const postsRunId = parts[1];
+      const pagesRunId = parts[2];
+      const reqs = [];
+
+      if (postsRunId && postsRunId !== 'none') {
+        reqs.push(this.apifyService.executeScraper({ action: 'get-run-data', actorId: 'KoJrdxJCTtpon81KY', runId: postsRunId })
+          .pipe(catchError(() => of({ success: true, data: [] } as ApifyResponse))));
+      }
+      if (pagesRunId && pagesRunId !== 'none') {
+        reqs.push(this.apifyService.executeScraper({ action: 'get-run-data', actorId: '4Hv5RhChiaDk6iwad', runId: pagesRunId })
+          .pipe(catchError(() => of({ success: true, data: [] } as ApifyResponse))));
+      }
+
+      if (reqs.length === 0) {
+        this.error.set('No hay IDs de ejecución válidos para Facebook.');
+        this.isLoading.set(false);
+        return;
+      }
+
+      forkJoin(reqs).subscribe(results => {
+        const combined = results.map(r => r.data || []).flat();
+        if (combined.length > 0) {
+          this.loadedNetwork.set('facebook');
+          this.processDataset(combined, 'facebook');
+        } else {
+          this.error.set('No se pudo recuperar el dataset híbrido.');
+        }
+        this.isLoading.set(false);
+      });
+      return;
+    }
 
     let targetActorId = actorInternalId;
     let network = 'instagram';
@@ -326,10 +416,7 @@ export class ApifyViewerComponent {
       'nFJndFXA5zjCTuudP': 'apify/google-search-scraper'
     };
 
-    if (reverseActorMap[actorInternalId]) {
-      targetActorId = reverseActorMap[actorInternalId];
-    }
-
+    if (reverseActorMap[actorInternalId]) targetActorId = reverseActorMap[actorInternalId];
     if (targetActorId.includes('facebook')) network = 'facebook';
     if (targetActorId.includes('tiktok')) network = 'tiktok';
     if (targetActorId.includes('youtube')) network = 'youtube';
@@ -337,21 +424,12 @@ export class ApifyViewerComponent {
     this.apifyService.executeScraper({ action: 'get-run-data', actorId: targetActorId, runId }).subscribe({
       next: (response) => {
         if (response.success && response.data && response.data.length > 0) {
-
           const sample = response.data[0];
           if (sample.facebookUrl || sample.pageUrl) network = 'facebook';
           if (sample.channelName && sample.channelTotalVideos) network = 'youtube';
 
           this.selectedNetwork.set(network);
-
-          const cleanData = this.standardizeData(response.data, network);
-          this.data.set(cleanData);
-          this.loadedNetwork.set(network);
-          this.selectedMetric.set('total');
-
-          this.chartOptions.set(this.apifyChartService.buildChartOptions(network, cleanData, 'total'));
-          this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(network, cleanData, 'total'));
-          this.performanceChartOptions.set(this.apifyChartService.buildPerformanceScatterChart(network, cleanData));
+          this.processDataset(response.data, network);
         } else {
           this.error.set('No se pudo recuperar el dataset.');
         }
@@ -367,14 +445,7 @@ export class ApifyViewerComponent {
     this.apifyService.getOmnichannelLatestData().subscribe({
       next: (consolidatedData) => {
         if (consolidatedData && consolidatedData.length > 0) {
-          const cleanData = this.standardizeData(consolidatedData, 'omnicanal');
-
-          this.data.set(cleanData);
-          this.loadedNetwork.set('omnicanal');
-          this.selectedMetric.set('total');
-
-          this.masterChartOptions.set(this.apifyChartService.buildMasterOmnichannelChart(cleanData, 'total'));
-          this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart('omnicanal', cleanData, 'total'));
+          this.processDataset(consolidatedData, 'omnicanal');
         } else {
           this.error.set('No se pudieron recuperar datos.');
         }
@@ -382,6 +453,23 @@ export class ApifyViewerComponent {
       },
       error: (err) => { this.error.set(err.message); this.isLoading.set(false); }
     });
+  }
+
+  // ==========================================
+  // HELPER METODOS (DRY PRINCIPLE)
+  // ==========================================
+  private processDataset(rawData: any[], network: string) {
+    const cleanData = this.standardizeData(rawData, network);
+    this.data.set(cleanData);
+    this.loadedNetwork.set(network);
+    this.selectedMetric.set('total');
+
+    this.chartOptions.set(this.apifyChartService.buildChartOptions(network, cleanData, 'total'));
+    if (network === 'omnicanal') {
+      this.masterChartOptions.set(this.apifyChartService.buildMasterOmnichannelChart(cleanData, 'total'));
+    }
+    this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(network, cleanData, 'total'));
+    this.performanceChartOptions.set(this.apifyChartService.buildPerformanceScatterChart(network, cleanData));
   }
 
   applyFilter(metric: ChartMetric) {
@@ -392,15 +480,13 @@ export class ApifyViewerComponent {
     if (currentData.length > 0 && currentLoadedNetwork) {
       if (currentLoadedNetwork === 'omnicanal') {
         this.masterChartOptions.set(this.apifyChartService.buildMasterOmnichannelChart(currentData, metric));
-        this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart('omnicanal', currentData, metric));
       } else {
         this.chartOptions.set(this.apifyChartService.buildChartOptions(currentLoadedNetwork, currentData, metric));
-        this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(currentLoadedNetwork, currentData, metric));
       }
+      this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(currentLoadedNetwork, currentData, metric));
     }
   }
 
-  // NUEVA FUNCIÓN: Para cambiar el orden desde la vista (HTML)
   changeKpiSort(metric: KpiSortOption) {
     this.kpiSortMetric.set(metric);
   }
@@ -419,6 +505,12 @@ export class ApifyViewerComponent {
   }
 
   private buildInputPayload(network: string, urls: string[]) {
-    return {};
+    if (network === 'facebook-pages') {
+      return { startUrls: urls.map(url => ({ url: url })) };
+    }
+    return {
+      startUrls: urls.map(url => ({ url: url })),
+      resultsLimit: this.resultsLimit()
+    };
   }
 }

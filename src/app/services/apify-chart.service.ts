@@ -8,6 +8,7 @@ interface BrandConfig {
   id: string;
   name: string;
   keywords: string[];
+  color: string; // NUEVO: Color corporativo fijo para cada marca
 }
 
 @Injectable({
@@ -15,29 +16,28 @@ interface BrandConfig {
 })
 export class ApifyChartService {
 
-  private readonly colorPalette = [
-    '#3ecf8e', '#6366f1', '#f43f5e', '#f59e0b', '#0ea5e9',
-    '#8b5cf6', '#a855f7', '#ec4899', '#14b8a6', '#f97316'
+  // Paleta de respaldo para marcas no registradas o embajadores
+  private readonly fallbackPalette = [
+    '#0ea5e9', '#8b5cf6', '#f43f5e', '#10b981', '#f59e0b', '#6366f1'
   ];
 
   // ==========================================
-  // NORMALIZADOR ESCALABLE (MATRIZ DE MARCAS LATAM)
+  // NORMALIZADOR ESCALABLE CON IDENTIDAD VISUAL
   // ==========================================
   private readonly BRAND_DICTIONARY: BrandConfig[] = [
-    { id: 'hills', name: "Hill's Pet Nutrition", keywords: ['hill', 'science diet', 'hillspet'] },
-    { id: 'purina', name: 'Purina Pro Plan', keywords: ['pro plan', 'proplan', 'purina'] },
-    { id: 'royal', name: 'Royal Canin', keywords: ['royal canin', 'royalcanin'] },
-    { id: 'nupec', name: 'Nupec', keywords: ['nupec'] },
-    { id: 'agility', name: 'Agility Gold', keywords: ['agility'] },
-    { id: 'chunky', name: 'Chunky Mascotas', keywords: ['chunky'] },
-    { id: 'pets_table', name: "Pet's Table", keywords: ["pet's table", 'pets table'] },
-    // FIX: Agregamos keywords ampliadas para asegurar que atrape a Virbac y Bonnat en cualquier red
-    { id: 'virbac', name: 'Virbac', keywords: ['virbac', 'virbaccolombia'] },
-    { id: 'bonnat', name: 'Bonnat', keywords: ['bonnat', 'bonnatpets', 'bonnatpetscol'] },
-    { id: 'true_blue', name: 'True Blue', keywords: ['true blue', 'trueblue'] },
-    { id: 'brit', name: 'Brit', keywords: ['brit'] },
-    { id: 'bravery', name: 'Bravery', keywords: ['bravery'] },
-    { id: 'b2b_media', name: 'Medios y Eventos B2B', keywords: ['pet industry', 'smartdogs', 'congreso', 'cvdc', 'balance dogs', 'orbit', 'familia_smartdogs'] }
+    { id: 'hills', name: "Hill's Pet Nutrition", keywords: ['hill', 'science diet', 'hillspet'], color: '#1E3A8A' }, // Azul Oscuro
+    { id: 'purina', name: 'Purina Pro Plan', keywords: ['pro plan', 'proplan', 'purina'], color: '#111827' },       // Negro/Gris muy oscuro
+    { id: 'royal', name: 'Royal Canin', keywords: ['royal canin', 'royalcanin'], color: '#E11D48' },                // Rojo Corporativo
+    { id: 'agility', name: 'Agility Gold', keywords: ['agility'], color: '#D97706' },                               // Dorado / Naranja
+    { id: 'virbac', name: 'Virbac', keywords: ['virbac', 'virbaccolombia'], color: '#2563EB' },                     // Azul Claro
+    { id: 'bonnat', name: 'Bonnat', keywords: ['bonnat', 'bonnatpets', 'bonnatpetscol'], color: '#0D9488' },        // Verde Teal
+    { id: 'nupec', name: 'Nupec', keywords: ['nupec'], color: '#0284C7' },
+    { id: 'chunky', name: 'Chunky Mascotas', keywords: ['chunky'], color: '#65A30D' },
+    { id: 'pets_table', name: "Pet's Table", keywords: ["pet's table", 'pets table'], color: '#059669' },
+    { id: 'true_blue', name: 'True Blue', keywords: ['true blue', 'trueblue'], color: '#3B82F6' },
+    { id: 'brit', name: 'Brit', keywords: ['brit'], color: '#DB2777' },
+    { id: 'bravery', name: 'Bravery', keywords: ['bravery'], color: '#9333EA' },
+    { id: 'b2b_media', name: 'Medios y Eventos B2B', keywords: ['pet industry', 'smartdogs', 'congreso', 'cvdc', 'balance dogs', 'orbit', 'familia_smartdogs'], color: '#475569' }
   ];
 
   public getNormalizedBrandName(item: any): string {
@@ -51,6 +51,16 @@ export class ApifyChartService {
     if (matchedBrand) return matchedBrand.name;
 
     return 'Embajadores / Creadores';
+  }
+
+  // Helper para extraer el color consistente de la marca
+  public getBrandColor(brandName: string): string {
+    const brand = this.BRAND_DICTIONARY.find(b => b.name === brandName);
+    if (brand) return brand.color;
+
+    // Si es "Embajadores / Creadores" u otra marca dinámica, asignamos un color basado en el nombre
+    const hash = brandName.split('').reduce((acc, char) => char.charCodeAt(0) + acc, 0);
+    return this.fallbackPalette[hash % this.fallbackPalette.length];
   }
 
   // ==========================================
@@ -97,7 +107,7 @@ export class ApifyChartService {
       const shares = item.shareCount || item.stats?.shareCount || item.videoMeta?.shareCount || 0;
       return likes + comments + shares;
     }
-    if (network === 'facebook') return (item.likes || 0) + (item.comments || 0) + (item.shares || 0);
+    if (network === 'facebook') return (item.likes || item.reactionLikeCount || 0) + (item.comments || 0) + (item.shares || 0);
 
     return (item.likesCount || item.likes || 0) + (item.commentsCount || item.comments || 0);
   }
@@ -165,7 +175,7 @@ export class ApifyChartService {
     const seriesConfig: any[] = [];
     const legendData: string[] = Object.keys(groupedData);
 
-    Object.entries(groupedData).forEach(([author, timeData], index) => {
+    Object.entries(groupedData).forEach(([author, timeData]) => {
       const seriesData = uniqueTimeKeys.map(key => timeData[key]);
       seriesConfig.push({
         name: author,
@@ -174,7 +184,7 @@ export class ApifyChartService {
         symbolSize: 8,
         areaStyle: { opacity: 0.05 },
         data: seriesData,
-        itemStyle: { color: this.colorPalette[index % this.colorPalette.length] },
+        itemStyle: { color: this.getBrandColor(author) }, // FIX: Color corporativo
         animationDuration: 1500,
         animationEasing: 'cubicOut'
       });
@@ -218,8 +228,8 @@ export class ApifyChartService {
     }
 
     const pieData = Object.entries(aggregatedData)
-      .map(([name, value], index) => ({
-        name, value, itemStyle: { color: this.colorPalette[index % this.colorPalette.length] }
+      .map(([name, value]) => ({
+        name, value, itemStyle: { color: this.getBrandColor(name) } // FIX: Color corporativo
       }));
 
     return {
@@ -250,7 +260,7 @@ export class ApifyChartService {
     const seriesConfig: any[] = [];
     const legendData: string[] = Object.keys(groupedData);
 
-    Object.entries(groupedData).forEach(([author, items], index) => {
+    Object.entries(groupedData).forEach(([author, items]) => {
       const seriesData = items.map(i => {
         const views = this.getMetricValue(i, network, 'views');
         const engagement = this.getMetricValue(i, network, 'total');
@@ -261,7 +271,7 @@ export class ApifyChartService {
       seriesConfig.push({
         name: author, type: 'scatter', symbolSize: (data: any) => Math.min(Math.max(data[2] * 2, 15), 50),
         data: seriesData,
-        itemStyle: { color: this.colorPalette[index % this.colorPalette.length], opacity: 0.7, borderColor: '#ffffff', borderWidth: 1.5, shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.1)' }
+        itemStyle: { color: this.getBrandColor(author), opacity: 0.7, borderColor: '#ffffff', borderWidth: 1.5, shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.1)' } // FIX: Color corporativo
       });
     });
 
@@ -316,12 +326,12 @@ export class ApifyChartService {
     const seriesConfig: any[] = [];
     const legendData = Object.keys(brandNetworkMap);
 
-    Object.entries(brandNetworkMap).forEach(([brand, netData], index) => {
+    Object.entries(brandNetworkMap).forEach(([brand, netData]) => {
        seriesConfig.push({
          name: brand,
          type: 'bar',
          data: networks.map(n => netData[n]),
-         itemStyle: { color: this.colorPalette[index % this.colorPalette.length], borderRadius: [4, 4, 0, 0] },
+         itemStyle: { color: this.getBrandColor(brand), borderRadius: [4, 4, 0, 0] }, // FIX: Color corporativo
          label: {
            show: true, position: 'top', fontFamily: 'Lato', fontSize: 10, color: '#6b7280',
            formatter: (p: any) => p.value > 0 ? this.formatCompactNumber(p.value) : ''
