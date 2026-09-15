@@ -6,6 +6,9 @@ import { map, catchError } from 'rxjs/operators';
 
 export type ApifyAction = 'run' | 'get-latest' | 'list-runs' | 'get-run-data';
 
+// Definición estricta de mercados soportados
+export type MarketCountry = 'Colombia' | 'México';
+
 export interface ApifyRunRecord {
   id: string;
   status: string;
@@ -13,6 +16,10 @@ export interface ApifyRunRecord {
   finishedAt: string;
   usageTotalUsd: number;
   actorId: string;
+  country?: MarketCountry;
+  // NUEVO: Propiedades para el rango de fechas de extracción
+  inputStartDate?: string;
+  inputEndDate?: string;
 }
 
 export interface ApifyPayload {
@@ -20,6 +27,10 @@ export interface ApifyPayload {
   actorId?: string;
   inputPayload?: Record<string, any>;
   runId?: string;
+  country?: MarketCountry;
+  // NUEVO: Fechas opcionales para enviar a Supabase en nuevas extracciones
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface ApifyResponse<T = any> {
@@ -59,29 +70,27 @@ export class ApifyService {
   }
 
   // ==========================================
-  // CARGA OMNICANAL EN PARALELO (MASTER GRAPH)
+  // CARGA OMNICANAL EN PARALELO
   // ==========================================
-  getOmnichannelLatestData(): Observable<any[]> {
 
-    // FIX: Actualización de los IDs estáticos por los nuevos scrapers de Perfiles y Páginas.
-    // Esto asegura que Supabase traiga las ejecuciones que realmente contienen los Seguidores/Suscriptores.
+  getOmnichannelLatestData(country: MarketCountry = 'Colombia'): Observable<any[]> {
     const actors = [
-      { net: 'facebook', id: '4Hv5RhChiaDk6iwad' },       // Scraper de Páginas de FB
-      { net: 'tiktok', id: '0FXVyOXXEmdGcV88a' },         // Scraper de Perfiles de TikTok
-      { net: 'instagram', id: 'apify/instagram-scraper' },// Scraper de Perfiles de Instagram
-      { net: 'youtube', id: 'streamers/youtube-scraper' } // Scraper de Canales de YouTube
+      { net: 'facebook', id: '4Hv5RhChiaDk6iwad' },
+      { net: 'tiktok', id: '0FXVyOXXEmdGcV88a' },
+      { net: 'instagram', id: 'apify/instagram-scraper' },
+      { net: 'youtube', id: 'streamers/youtube-scraper' }
     ];
 
     const requests = actors.map(actor =>
-      this.executeScraper({ action: 'get-latest', actorId: actor.id }).pipe(
+      this.executeScraper({ action: 'get-latest', actorId: actor.id, country }).pipe(
         map(response => {
           if (response.success && Array.isArray(response.data)) {
-            return response.data.map(item => ({ ...item, __network: actor.net }));
+            return response.data.map(item => ({ ...item, __network: actor.net, __country: country }));
           }
           return [];
         }),
         catchError(err => {
-          console.error(`[ApifyService] Error cargando data de ${actor.net}:`, err);
+          console.error(`[ApifyService] Error cargando data de ${actor.net} para ${country}:`, err);
           return of([]);
         })
       )

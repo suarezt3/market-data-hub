@@ -7,7 +7,7 @@ import type { EChartsOption } from 'echarts';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
-import { ApifyService, ApifyPayload, ApifyAction, ApifyRunRecord, ApifyResponse } from '../../services/apify.service';
+import { ApifyService, ApifyPayload, ApifyAction, ApifyRunRecord, ApifyResponse, MarketCountry } from '../../services/apify.service';
 import { ApifyChartService, ChartMetric } from '../../services/apify-chart.service';
 
 import { ApifyDataGridComponent } from '../apify-data-grid/apify-data-grid.component';
@@ -39,6 +39,8 @@ export class ApifyViewerComponent {
   runsList = signal<ApifyRunRecord[]>([]);
 
   loadedNetwork = signal<string>('');
+  // NUEVO: Estado que guarda la verdad absoluta del país cargado actualmente
+  loadedCountry = signal<string>('');
 
   chartOptions = signal<EChartsOption | null>(null);
   marketShareChartOptions = signal<EChartsOption | null>(null);
@@ -48,8 +50,19 @@ export class ApifyViewerComponent {
   selectedMetric = signal<ChartMetric>('total');
   kpiSortMetric = signal<KpiSortOption>('followers');
 
+  // Estado que controla la intención del usuario en el formulario (sidebar)
+  selectedCountry = signal<MarketCountry>('Colombia');
+
+  selectedNetwork = signal<string>('tiktok');
+  actionType = signal<ApifyAction>('get-latest');
+  targetUrlsInput = signal<string>('');
+  resultsLimit = signal<number>(30);
+  scrapeType = signal<string>('posts');
+  startDate = signal<string>('');
+  endDate = signal<string>('');
+
   // ==========================================
-  // LÓGICA COMPUTADA AVANZADA (MOTOR KPI CORREGIDO)
+  // LÓGICA COMPUTADA AVANZADA
   // ==========================================
 
   dynamicDateRange = computed(() => {
@@ -106,7 +119,6 @@ export class ApifyViewerComponent {
         ex.profileViews = Math.max(ex.profileViews, kpi.profileViews);
         ex.profilePosts = Math.max(ex.profilePosts, kpi.profilePosts);
 
-        // CORRECCIÓN: Sumatoria real de posts y métricas proxy
         ex.postLikesSum += kpi.postLikes;
         ex.postViewsSum += kpi.postViews;
         ex.postCountSum += kpi.postCount;
@@ -127,7 +139,6 @@ export class ApifyViewerComponent {
           totalFollowers += stats.followers;
           totalLikes += (stats.profileLikes > 0 ? stats.profileLikes : stats.postLikesSum);
           totalViews += (stats.profileViews > 0 ? stats.profileViews : stats.postViewsSum);
-          // CORRECCIÓN: Si no hay histórico de perfil, usamos la suma exacta de los posts extraídos
           totalPosts += (stats.profilePosts > 0 ? stats.profilePosts : stats.postCountSum);
           if (stats.avatar && !finalAvatar) finalAvatar = stats.avatar;
         });
@@ -146,14 +157,6 @@ export class ApifyViewerComponent {
         return b.followers - a.followers;
       });
   });
-
-  selectedNetwork = signal<string>('tiktok');
-  actionType = signal<ApifyAction>('get-latest');
-  targetUrlsInput = signal<string>('');
-  resultsLimit = signal<number>(30);
-  scrapeType = signal<string>('posts');
-  startDate = signal<string>('');
-  endDate = signal<string>('');
 
   private readonly ACTORS_MAP: Record<string, string> = {
     'facebook': 'apify/facebook-posts-scraper',
@@ -267,6 +270,7 @@ export class ApifyViewerComponent {
     this.resetState();
     const network = this.selectedNetwork();
     const action = this.actionType();
+    const currentCountry = this.selectedCountry();
 
     if (action === 'list-runs') {
       this.fetchGlobalRunsHistory();
@@ -281,13 +285,19 @@ export class ApifyViewerComponent {
     const payload: ApifyPayload = {
       action: action,
       actorId: this.ACTORS_MAP[network],
-      ...(action === 'run' ? { inputPayload: this.buildInputPayload(network, rawUrls) } : {})
+      country: currentCountry,
+      ...(action === 'run' ? {
+        inputPayload: this.buildInputPayload(network, rawUrls),
+        startDate: this.startDate() || undefined,
+        endDate: this.endDate() || undefined
+      } : {})
     };
 
     this.apifyService.executeScraper(payload).subscribe({
       next: (response) => {
         if (response.success && response.data) {
-          this.processDataset(response.data, network);
+          // Extraemos data actual usando el currentCountry del formulario
+          this.processDataset(response.data, network, currentCountry);
         } else {
           this.error.set('La ejecución finalizó sin datos.');
         }
@@ -298,7 +308,7 @@ export class ApifyViewerComponent {
   }
 
   // ==========================================
-  // RUTAS DE EXTRACCIÓN SEPARADAS Y LIMPIAS
+  // RUTAS DE EXTRACCIÓN SEPARADAS
   // ==========================================
 
   private fetchGlobalRunsHistory() {
@@ -307,7 +317,6 @@ export class ApifyViewerComponent {
         if (response.success && response.data) {
           const allRuns = response.data as ApifyRunRecord[];
 
-          // CORRECCIÓN: Filtramos usando los IDs internos reales de Supabase para evitar duplicados en la tabla
           const fbPosts = allRuns.filter(r => r.actorId === 'KoJrdxJCTtpon81KY' || r.actorId === 'apify/facebook-posts-scraper');
           const fbPages = allRuns.filter(r => r.actorId === '4Hv5RhChiaDk6iwad' || r.actorId === 'apify/facebook-pages-scraper');
 
@@ -318,18 +327,20 @@ export class ApifyViewerComponent {
 
           const finalRuns = [...otherRuns];
 
-          // Creamos UNA SOLA fila limpia para Facebook
           if (fbPosts.length > 0 || fbPages.length > 0) {
             const latestPost = fbPosts[0] || null;
             const latestPage = fbPages[0] || null;
 
             finalRuns.push({
               id: `HYBRID|${latestPost?.id || 'none'}|${latestPage?.id || 'none'}`,
-              actorId: 'Facebook (Consolidado)', // Muestra un nombre limpio en la tabla
+              actorId: 'Facebook (Consolidado)',
               status: (latestPost?.status === 'SUCCEEDED' || latestPage?.status === 'SUCCEEDED') ? 'SUCCEEDED' : 'FAILED',
               startedAt: latestPost?.startedAt || latestPage?.startedAt || new Date().toISOString(),
               finishedAt: latestPost?.finishedAt || latestPage?.finishedAt || new Date().toISOString(),
-              usageTotalUsd: (latestPost?.usageTotalUsd || 0) + (latestPage?.usageTotalUsd || 0)
+              usageTotalUsd: (latestPost?.usageTotalUsd || 0) + (latestPage?.usageTotalUsd || 0),
+              country: latestPost?.country || latestPage?.country || 'Colombia',
+              inputStartDate: latestPost?.inputStartDate,
+              inputEndDate: latestPost?.inputEndDate
             });
           }
 
@@ -347,9 +358,17 @@ export class ApifyViewerComponent {
   private fetchFacebookHybrid(action: ApifyAction, urls: string[]) {
     const postsActor = 'apify/facebook-posts-scraper';
     const pagesActor = '4Hv5RhChiaDk6iwad';
+    const currentCountry = this.selectedCountry();
 
-    const payloadPosts: ApifyPayload = { action, actorId: postsActor, ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-posts', urls) } : {}) };
-    const payloadPages: ApifyPayload = { action, actorId: pagesActor, ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-pages', urls) } : {}) };
+    const payloadPosts: ApifyPayload = {
+      action, actorId: postsActor, country: currentCountry,
+      ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-posts', urls), startDate: this.startDate() || undefined, endDate: this.endDate() || undefined } : {})
+    };
+
+    const payloadPages: ApifyPayload = {
+      action, actorId: pagesActor, country: currentCountry,
+      ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-pages', urls) } : {})
+    };
 
     const req1 = this.apifyService.executeScraper(payloadPosts).pipe(catchError(() => of({ success: true, data: [] } as ApifyResponse)));
     const req2 = this.apifyService.executeScraper(payloadPages).pipe(catchError(() => of({ success: true, data: [] } as ApifyResponse)));
@@ -357,7 +376,7 @@ export class ApifyViewerComponent {
     forkJoin([req1, req2]).subscribe(([res1, res2]) => {
       const combinedData = [...(res1.data || []), ...(res2.data || [])];
       if (combinedData.length > 0) {
-        this.processDataset(combinedData, 'facebook');
+        this.processDataset(combinedData, 'facebook', currentCountry);
       } else {
         this.error.set('La ejecución finalizó sin datos.');
       }
@@ -368,7 +387,10 @@ export class ApifyViewerComponent {
   loadSpecificRun(runId: string, actorInternalId: string) {
     this.resetState();
 
-    // INTERCEPTOR: Si el ID de la fila indica que es el Consolidado Híbrido, cruza la data
+    // 1. Deducir el país real a partir del historial (Verdad absoluta)
+    const historyRun = this.runsList().find(r => r.id === runId);
+    const runCountry = historyRun?.country || 'Colombia';
+
     if (runId.startsWith('HYBRID|')) {
       const parts = runId.split('|');
       const postsRunId = parts[1];
@@ -394,7 +416,8 @@ export class ApifyViewerComponent {
         const combined = results.map(r => r.data || []).flat();
         if (combined.length > 0) {
           this.loadedNetwork.set('facebook');
-          this.processDataset(combined, 'facebook');
+          // Inyectamos el país deducido de la fila
+          this.processDataset(combined, 'facebook', runCountry);
         } else {
           this.error.set('No se pudo recuperar el dataset híbrido.');
         }
@@ -429,7 +452,8 @@ export class ApifyViewerComponent {
           if (sample.channelName && sample.channelTotalVideos) network = 'youtube';
 
           this.selectedNetwork.set(network);
-          this.processDataset(response.data, network);
+          // Inyectamos el país deducido de la fila
+          this.processDataset(response.data, network, runCountry);
         } else {
           this.error.set('No se pudo recuperar el dataset.');
         }
@@ -441,11 +465,13 @@ export class ApifyViewerComponent {
 
   fetchOmnichannelData() {
     this.resetState();
+    const currentCountry = this.selectedCountry();
 
-    this.apifyService.getOmnichannelLatestData().subscribe({
+    this.apifyService.getOmnichannelLatestData(currentCountry).subscribe({
       next: (consolidatedData) => {
         if (consolidatedData && consolidatedData.length > 0) {
-          this.processDataset(consolidatedData, 'omnicanal');
+          // Inyectamos el país del selector, porque Omnicanal trae siempre lo actual
+          this.processDataset(consolidatedData, 'omnicanal', currentCountry);
         } else {
           this.error.set('No se pudieron recuperar datos.');
         }
@@ -458,10 +484,16 @@ export class ApifyViewerComponent {
   // ==========================================
   // HELPER METODOS (DRY PRINCIPLE)
   // ==========================================
-  private processDataset(rawData: any[], network: string) {
+
+  // NUEVO: Ahora recibe el string "country" como tercer parámetro
+  private processDataset(rawData: any[], network: string, country: string) {
     const cleanData = this.standardizeData(rawData, network);
     this.data.set(cleanData);
     this.loadedNetwork.set(network);
+
+    // Asignamos la verdad absoluta para la UI
+    this.loadedCountry.set(country);
+
     this.selectedMetric.set('total');
 
     this.chartOptions.set(this.apifyChartService.buildChartOptions(network, cleanData, 'total'));
@@ -500,8 +532,7 @@ export class ApifyViewerComponent {
     this.performanceChartOptions.set(null);
     this.masterChartOptions.set(null);
     this.runsList.set([]);
-    this.startDate.set('');
-    this.endDate.set('');
+    this.loadedCountry.set(''); // Limpiamos el país cargado anterior
   }
 
   private buildInputPayload(network: string, urls: string[]) {

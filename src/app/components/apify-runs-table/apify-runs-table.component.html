@@ -4,29 +4,49 @@
 
     <thead>
       <tr>
-        <th>Run ID</th>
+        <!-- Se eliminó la columna Run ID por limpieza visual -->
+        <th>Mercado</th>
         <th>Plataforma</th>
+        <th>Período Extraído</th> <!-- NUEVA COLUMNA: Rango de fechas de la data -->
         <th>Estado</th>
-        <th>Fecha</th>
+        <th>Fecha de Ejecución</th>
+        <th>Duración</th>
         <th>Costo (USD)</th>
       </tr>
     </thead>
 
     <tbody>
       @for (run of runsList; track run.id) {
-        <!-- Enlazamos el evento click para emitir el Output al padre -->
         <tr class="clickable-row" (click)="onRowClick(run.id, run.actorId)">
-          <td class="cell-monospace">{{ run.id }}</td>
+
+          <!-- UX: Mercado con texto limpio y tipografía destacada -->
+          <td class="cell-primary" style="font-weight: 600;">{{ run.country || 'Colombia' }}</td>
+
           <td class="cell-primary">{{ getActorFriendlyName(run.actorId) }}</td>
+
+          <!-- UX: Columna dinámica para el rango de fechas de extracción -->
+          <td class="cell-secondary">
+            @if (run.inputStartDate && run.inputEndDate) {
+              {{ run.inputStartDate | date:'shortDate' }} - {{ run.inputEndDate | date:'shortDate' }}
+            } @else if (run.inputStartDate) {
+              Desde {{ run.inputStartDate | date:'shortDate' }}
+            } @else {
+              <span style="color: #9ca3af; font-style: italic; font-size: 0.85em;">Histórico Completo</span>
+            }
+          </td>
+
           <td>
-            <!-- Asignación dinámica de clases para el estado -->
             <span class="status-badge"
                   [class.success]="run.status === 'SUCCEEDED'"
                   [class.error]="run.status !== 'SUCCEEDED'">
               {{ run.status }}
             </span>
           </td>
+
           <td class="cell-secondary">{{ run.startedAt | date:'medium' }}</td>
+
+          <td class="cell-secondary font-mono">{{ calculateDuration(run.startedAt, run.finishedAt) }}</td>
+
           <td class="cell-secondary">{{ run.usageTotalUsd | currency:'USD':'symbol':'1.3-3' }}</td>
         </tr>
       }
@@ -34,7 +54,6 @@
 
   </table>
 
-  <!-- UX: Estado vacío por si en algún momento la lista llega en blanco -->
   @if (runsList.length === 0) {
     <div class="empty-table-state">
       <p>No se encontraron registros de ejecuciones.</p>

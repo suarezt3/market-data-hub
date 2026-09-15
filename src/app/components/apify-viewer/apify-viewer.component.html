@@ -8,8 +8,17 @@
       <p>Análisis de Competencia LATAM</p>
     </div>
 
+    <!-- NUEVO: Selector de Mercado (Intención del Usuario) -->
+    <div class="control-group fade-in">
+      <label>1. Mercado a Analizar</label>
+      <select [(ngModel)]="selectedCountry" class="form-input">
+        <option value="Colombia">🇨🇴 Colombia</option>
+        <option value="México">🇲🇽 México</option>
+      </select>
+    </div>
+
     <div class="control-group">
-      <label>1. Plataforma a Analizar</label>
+      <label>2. Plataforma a Analizar</label>
       <select [(ngModel)]="selectedNetwork" class="form-input">
         <option value="facebook">Facebook (Páginas)</option>
         <option value="instagram">Instagram (Perfiles)</option>
@@ -19,7 +28,7 @@
     </div>
 
     <div class="control-group">
-      <label>2. Origen de Datos</label>
+      <label>3. Origen de Datos</label>
       <div class="radio-group">
         <label class="radio-label">
           <input type="radio" name="actionType" value="get-latest" [(ngModel)]="actionType">
@@ -40,7 +49,7 @@
       <div class="fade-in" style="display: flex; flex-direction: column; gap: 1.5rem;">
 
         <div class="control-group">
-          <label>3. URLs de los Competidores</label>
+          <label>4. URLs de los Competidores</label>
           <textarea
             [(ngModel)]="targetUrlsInput"
             rows="4"
@@ -51,7 +60,7 @@
         </div>
 
         <div class="control-group">
-          <label>4. Contenido a Extraer</label>
+          <label>5. Contenido a Extraer</label>
           <select [(ngModel)]="scrapeType" class="form-input">
             <option value="posts">Publicaciones (Posts)</option>
             <option value="comments">Comentarios</option>
@@ -97,7 +106,7 @@
       }
     </button>
     <small class="help-text" style="text-align: center; display: block; margin-top: 0.5rem;">
-      Cruza el último historial de todas las plataformas.
+      Cruza el último historial de todas las plataformas para {{ selectedCountry() }}.
     </small>
   </aside>
 
@@ -140,8 +149,16 @@
           </h3>
           <p class="subtitle">
             Se consolidaron <strong>{{ data().length }} registros</strong>.
+
+            <!-- UX FIX: Aquí usamos loadedCountry(), la verdad absoluta del dataset cargado -->
+            @if (loadedCountry()) {
+              <span class="date-badge" style="margin-left: 0.5rem; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb;">
+                📍 Mercado: {{ loadedCountry() }}
+              </span>
+            }
+
             @if (dynamicDateRange()) {
-              <span class="date-badge">
+              <span class="date-badge" style="margin-left: 0.5rem;">
                 🗓️ Temporalidad: {{ dynamicDateRange() }}
               </span>
             }
@@ -169,7 +186,6 @@
         @if (competitorsKpi().length > 0) {
           <div class="chart-card kpi-container" style="display: flex; flex-direction: column; gap: 1rem; overflow-y: auto;">
 
-            <!-- NUEVO: HEADER CON CONTROLES DE ORDENAMIENTO -->
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.2rem; flex-wrap: wrap; gap: 0.5rem;">
               <div>
                 <h4 style="margin: 0; font-size: 1.1rem; color: #111827;">Comunidad de Marca</h4>
@@ -208,26 +224,22 @@
 
                   <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem;">
 
-                    <!-- 1. SEGUIDORES -->
                     <span style="background: #eff6ff; color: #1d4ed8; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bfdbfe; white-space: nowrap;">
                       👥 {{ comp.followersStr }} {{ loadedNetwork() === 'youtube' ? 'Subs' : (loadedNetwork() === 'omnicanal' ? 'Comunidad' : 'Segs') }}
                     </span>
 
-                    <!-- 2. VISTAS -->
                     @if (comp.accountViews > 0) {
                       <span style="background: #fdf4ff; color: #a21caf; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #fbcfe8; white-space: nowrap;">
                         👁️ {{ comp.viewsStr }} Vistas
                       </span>
                     }
 
-                    <!-- 3. LIKES -->
                     @if (comp.accountLikes > 0) {
                       <span style="background: #fff1f2; color: #be123c; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #fecdd3; white-space: nowrap;">
                         ❤️ {{ comp.likesStr }} Likes
                       </span>
                     }
 
-                    <!-- 4. POSTS / VIDEOS -->
                     @if (comp.accountPosts > 0) {
                       <span style="background: #f0fdf4; color: #15803d; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bbf7d0; white-space: nowrap;">
                         {{ loadedNetwork() === 'youtube' ? '▶️' : '📝' }} {{ comp.postsStr }} {{ loadedNetwork() === 'youtube' ? 'Videos' : (loadedNetwork() === 'omnicanal' ? 'Publicaciones' : 'Posts') }}

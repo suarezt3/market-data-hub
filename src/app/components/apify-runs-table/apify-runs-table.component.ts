@@ -23,7 +23,7 @@ export class ApifyRunsTableComponent {
       // Facebook
       'KoJrdxJCTtpon81KY': 'Facebook (Posts)',
       'apify/facebook-posts-scraper': 'Facebook (Posts)',
-      '4Hv5RhChiaDk6iwad': 'Facebook (Páginas)', // <--- FIX: Agregamos el nuevo scraper
+      '4Hv5RhChiaDk6iwad': 'Facebook (Páginas)',
 
       // Instagram
       'shu8hvrXbJbY3Eb9W': 'Instagram (Perfiles)',
@@ -43,6 +43,37 @@ export class ApifyRunsTableComponent {
     return platformMapping[actorId] || actorId;
   }
 
+  // ==========================================
+  // HELPERS DE TRANSFORMACIÓN DE DATOS
+  // ==========================================
+
+  /**
+   * Calcula la diferencia de tiempo entre el inicio y el fin de la ejecución.
+   */
+  calculateDuration(start: string, end: string): string {
+    if (!start || !end) return '-';
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    // Validamos que las fechas sean correctas
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return '-';
+
+    const diffMs = Math.abs(endDate.getTime() - startDate.getTime());
+    const diffSecs = Math.floor(diffMs / 1000);
+
+    const minutes = Math.floor(diffSecs / 60);
+    const seconds = diffSecs % 60;
+
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  }
+
+  // ==========================================
+  // MANEJADOR DE EVENTOS
+  // ==========================================
   onRowClick(runId: string, actorId: string) {
     this.runSelected.emit({ runId, actorInternalId: actorId });
   }
