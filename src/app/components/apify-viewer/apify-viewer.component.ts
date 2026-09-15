@@ -35,38 +35,118 @@ export class ApifyViewerComponent {
 
   isLoading = signal<boolean>(false);
   error = signal<string | null>(null);
+
   data = signal<any[]>([]);
   runsList = signal<ApifyRunRecord[]>([]);
 
   loadedNetwork = signal<string>('');
-  // NUEVO: Estado que guarda la verdad absoluta del país cargado actualmente
   loadedCountry = signal<string>('');
-
-  chartOptions = signal<EChartsOption | null>(null);
-  marketShareChartOptions = signal<EChartsOption | null>(null);
-  performanceChartOptions = signal<EChartsOption | null>(null);
-  masterChartOptions = signal<EChartsOption | null>(null);
 
   selectedMetric = signal<ChartMetric>('total');
   kpiSortMetric = signal<KpiSortOption>('followers');
 
-  // Estado que controla la intención del usuario en el formulario (sidebar)
+  // Controles de extracción
   selectedCountry = signal<MarketCountry>('Colombia');
-
   selectedNetwork = signal<string>('tiktok');
   actionType = signal<ApifyAction>('get-latest');
   targetUrlsInput = signal<string>('');
   resultsLimit = signal<number>(30);
   scrapeType = signal<string>('posts');
-  startDate = signal<string>('');
-  endDate = signal<string>('');
+  scrapeStartDate = signal<string>('');
+
+  // Controles del Filtro Local
+  filterStartDate = signal<string>('');
+  filterEndDate = signal<string>('');
 
   // ==========================================
-  // LÓGICA COMPUTADA AVANZADA
+  // LÓGICA DE VALIDACIÓN DE FECHAS (UX Auto-corrección)
+  // ==========================================
+
+  onStartDateChange(newDate: string) {
+    this.filterStartDate.set(newDate);
+    const end = this.filterEndDate();
+    // Si la nueva fecha de inicio es mayor que la fecha final actual, igualamos la final
+    if (newDate && end && new Date(newDate) > new Date(end)) {
+      this.filterEndDate.set(newDate);
+    }
+  }
+
+  onEndDateChange(newDate: string) {
+    this.filterEndDate.set(newDate);
+    const start = this.filterStartDate();
+    // Si la nueva fecha final es menor que la de inicio, retrocedemos la de inicio
+    if (newDate && start && new Date(newDate) < new Date(start)) {
+      this.filterStartDate.set(newDate);
+    }
+  }
+
+  // ==========================================
+  // MOTOR REACTIVO ABSOLUTO (Señales Computadas)
+  // ==========================================
+
+  filteredData = computed(() => {
+    const currentData = this.data();
+    const startStr = this.filterStartDate();
+    const endStr = this.filterEndDate();
+
+    if (!startStr && !endStr) return currentData;
+
+    const startMs = startStr ? new Date(startStr + 'T00:00:00').getTime() : 0;
+    const endMs = endStr ? new Date(endStr + 'T23:59:59').getTime() : Infinity;
+
+    return currentData.filter(item => {
+      const rawDate = item.time || item.timestamp || item.date || item.createTimeISO || item.createdAt || item.videoMeta?.createTime || item.createTime;
+      let itemMs = 0;
+
+      if (typeof rawDate === 'number') {
+        itemMs = rawDate < 10000000000 ? rawDate * 1000 : rawDate;
+      } else if (item.createTime && typeof item.createTime === 'number') {
+        itemMs = item.createTime < 10000000000 ? item.createTime * 1000 : item.createTime;
+      } else {
+        itemMs = rawDate ? new Date(rawDate).getTime() : 0;
+      }
+
+      if (!itemMs || isNaN(itemMs)) return true;
+
+      return itemMs >= startMs && itemMs <= endMs;
+    });
+  });
+
+  // GRÁFICAS COMPUTADAS: Se redibujan solas al cambiar filteredData
+  chartOptions = computed(() => {
+    const data = this.filteredData();
+    const net = this.loadedNetwork();
+    if (!data.length || !net || net === 'omnicanal') return null;
+    return this.apifyChartService.buildChartOptions(net, data, this.selectedMetric());
+  });
+
+  marketShareChartOptions = computed(() => {
+    const data = this.filteredData();
+    const net = this.loadedNetwork();
+    if (!data.length || !net) return null;
+    return this.apifyChartService.buildMarketShareChart(net, data, this.selectedMetric());
+  });
+
+  performanceChartOptions = computed(() => {
+    const data = this.filteredData();
+    const net = this.loadedNetwork();
+    if (!data.length || !net || net === 'omnicanal') return null;
+    return this.apifyChartService.buildPerformanceScatterChart(net, data);
+  });
+
+  masterChartOptions = computed(() => {
+    const data = this.filteredData();
+    const net = this.loadedNetwork();
+    if (!data.length || net !== 'omnicanal') return null;
+    return this.apifyChartService.buildMasterOmnichannelChart(data, this.selectedMetric());
+  });
+
+  // ==========================================
+  // KPIs Y MÉTRICAS COMPUTADAS
   // ==========================================
 
   dynamicDateRange = computed(() => {
-    const currentData = this.data();
+    const currentData = this.filteredData();
     if (!currentData || currentData.length === 0) return null;
 
     const timestamps = currentData.map(item => {
@@ -85,7 +165,7 @@ export class ApifyViewerComponent {
   });
 
   competitorsKpi = computed(() => {
-    const currentData = this.data();
+    const currentData = this.filteredData();
     if (!currentData || currentData.length === 0) return [];
 
     const brandNetworkStats = new Map<string, Record<string, {
@@ -118,7 +198,6 @@ export class ApifyViewerComponent {
         ex.profileLikes = Math.max(ex.profileLikes, kpi.profileLikes);
         ex.profileViews = Math.max(ex.profileViews, kpi.profileViews);
         ex.profilePosts = Math.max(ex.profilePosts, kpi.profilePosts);
-
         ex.postLikesSum += kpi.postLikes;
         ex.postViewsSum += kpi.postViews;
         ex.postCountSum += kpi.postCount;
@@ -182,8 +261,6 @@ export class ApifyViewerComponent {
 
       if (net === 'instagram' && (item.latestPosts || item.latestIgtvVideos)) {
         const allPosts = [...(item.latestPosts || []), ...(item.latestIgtvVideos || [])];
-        const totalRecentViews = allPosts.reduce((sum, p) => sum + (p.videoViewCount || p.videoPlayCount || p.playCount || p.viewsCount || 0), 0);
-
         allPosts.forEach((post: any) => {
           processed.push({
             ...post,
@@ -288,15 +365,13 @@ export class ApifyViewerComponent {
       country: currentCountry,
       ...(action === 'run' ? {
         inputPayload: this.buildInputPayload(network, rawUrls),
-        startDate: this.startDate() || undefined,
-        endDate: this.endDate() || undefined
+        startDate: this.scrapeStartDate() || undefined
       } : {})
     };
 
     this.apifyService.executeScraper(payload).subscribe({
       next: (response) => {
         if (response.success && response.data) {
-          // Extraemos data actual usando el currentCountry del formulario
           this.processDataset(response.data, network, currentCountry);
         } else {
           this.error.set('La ejecución finalizó sin datos.');
@@ -362,7 +437,7 @@ export class ApifyViewerComponent {
 
     const payloadPosts: ApifyPayload = {
       action, actorId: postsActor, country: currentCountry,
-      ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-posts', urls), startDate: this.startDate() || undefined, endDate: this.endDate() || undefined } : {})
+      ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-posts', urls), startDate: this.scrapeStartDate() || undefined } : {})
     };
 
     const payloadPages: ApifyPayload = {
@@ -387,7 +462,6 @@ export class ApifyViewerComponent {
   loadSpecificRun(runId: string, actorInternalId: string) {
     this.resetState();
 
-    // 1. Deducir el país real a partir del historial (Verdad absoluta)
     const historyRun = this.runsList().find(r => r.id === runId);
     const runCountry = historyRun?.country || 'Colombia';
 
@@ -416,7 +490,6 @@ export class ApifyViewerComponent {
         const combined = results.map(r => r.data || []).flat();
         if (combined.length > 0) {
           this.loadedNetwork.set('facebook');
-          // Inyectamos el país deducido de la fila
           this.processDataset(combined, 'facebook', runCountry);
         } else {
           this.error.set('No se pudo recuperar el dataset híbrido.');
@@ -452,7 +525,6 @@ export class ApifyViewerComponent {
           if (sample.channelName && sample.channelTotalVideos) network = 'youtube';
 
           this.selectedNetwork.set(network);
-          // Inyectamos el país deducido de la fila
           this.processDataset(response.data, network, runCountry);
         } else {
           this.error.set('No se pudo recuperar el dataset.');
@@ -470,7 +542,6 @@ export class ApifyViewerComponent {
     this.apifyService.getOmnichannelLatestData(currentCountry).subscribe({
       next: (consolidatedData) => {
         if (consolidatedData && consolidatedData.length > 0) {
-          // Inyectamos el país del selector, porque Omnicanal trae siempre lo actual
           this.processDataset(consolidatedData, 'omnicanal', currentCountry);
         } else {
           this.error.set('No se pudieron recuperar datos.');
@@ -482,41 +553,20 @@ export class ApifyViewerComponent {
   }
 
   // ==========================================
-  // HELPER METODOS (DRY PRINCIPLE)
+  // HELPER METODOS
   // ==========================================
 
-  // NUEVO: Ahora recibe el string "country" como tercer parámetro
   private processDataset(rawData: any[], network: string, country: string) {
     const cleanData = this.standardizeData(rawData, network);
     this.data.set(cleanData);
     this.loadedNetwork.set(network);
-
-    // Asignamos la verdad absoluta para la UI
     this.loadedCountry.set(country);
-
     this.selectedMetric.set('total');
-
-    this.chartOptions.set(this.apifyChartService.buildChartOptions(network, cleanData, 'total'));
-    if (network === 'omnicanal') {
-      this.masterChartOptions.set(this.apifyChartService.buildMasterOmnichannelChart(cleanData, 'total'));
-    }
-    this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(network, cleanData, 'total'));
-    this.performanceChartOptions.set(this.apifyChartService.buildPerformanceScatterChart(network, cleanData));
+    // Al setear las señales base, todas las señales computadas (gráficas) se recalcularán solas
   }
 
   applyFilter(metric: ChartMetric) {
     this.selectedMetric.set(metric);
-    const currentData = this.data();
-    const currentLoadedNetwork = this.loadedNetwork();
-
-    if (currentData.length > 0 && currentLoadedNetwork) {
-      if (currentLoadedNetwork === 'omnicanal') {
-        this.masterChartOptions.set(this.apifyChartService.buildMasterOmnichannelChart(currentData, metric));
-      } else {
-        this.chartOptions.set(this.apifyChartService.buildChartOptions(currentLoadedNetwork, currentData, metric));
-      }
-      this.marketShareChartOptions.set(this.apifyChartService.buildMarketShareChart(currentLoadedNetwork, currentData, metric));
-    }
   }
 
   changeKpiSort(metric: KpiSortOption) {
@@ -527,12 +577,10 @@ export class ApifyViewerComponent {
     this.isLoading.set(true);
     this.error.set(null);
     this.data.set([]);
-    this.chartOptions.set(null);
-    this.marketShareChartOptions.set(null);
-    this.performanceChartOptions.set(null);
-    this.masterChartOptions.set(null);
     this.runsList.set([]);
-    this.loadedCountry.set(''); // Limpiamos el país cargado anterior
+    this.loadedCountry.set('');
+    this.filterStartDate.set('');
+    this.filterEndDate.set('');
   }
 
   private buildInputPayload(network: string, urls: string[]) {

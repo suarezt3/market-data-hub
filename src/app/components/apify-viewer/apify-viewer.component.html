@@ -1,14 +1,13 @@
 <!-- src/app/components/apify-viewer/apify-viewer.component.html -->
 <div class="dashboard-layout">
 
-  <!-- PANEL LATERAL (CONTROLES) -->
+  <!-- PANEL LATERAL (CONTROLES DE EXTRACCIÓN) -->
   <aside class="sidebar-controls">
     <div class="brand-header">
       <h2>Market Intelligence</h2>
       <p>Análisis de Competencia LATAM</p>
     </div>
 
-    <!-- NUEVO: Selector de Mercado (Intención del Usuario) -->
     <div class="control-group fade-in">
       <label>1. Mercado a Analizar</label>
       <select [(ngModel)]="selectedCountry" class="form-input">
@@ -68,19 +67,15 @@
           </select>
         </div>
 
-        <div class="control-group date-range-group">
-          <div class="date-input-wrapper">
-            <label>Fecha Inicio (Opcional)</label>
-            <input type="date" [(ngModel)]="startDate" class="form-input">
-          </div>
-          <div class="date-input-wrapper">
-            <label>Fecha Fin (Opcional)</label>
-            <input type="date" [(ngModel)]="endDate" class="form-input">
-          </div>
+        <!-- REFACTOR: Solo pedimos fecha de inicio para la extracción en Apify -->
+        <div class="control-group">
+          <label>6. Extraer posts después de (Opcional)</label>
+          <input type="date" [(ngModel)]="scrapeStartDate" class="form-input">
+          <small class="help-text">Apify extraerá todo desde esta fecha hasta hoy.</small>
         </div>
 
         <div class="control-group">
-          <label>6. Límite de Resultados por URL</label>
+          <label>7. Límite de Resultados por URL</label>
           <input type="number" [(ngModel)]="resultsLimit" min="1" max="1000" class="form-input">
         </div>
       </div>
@@ -148,9 +143,8 @@
             {{ loadedNetwork() === 'omnicanal' ? 'Visión Consolidada del Ecosistema Digital' : 'Insights de Mercado en ' + (loadedNetwork() | titlecase) }}
           </h3>
           <p class="subtitle">
-            Se consolidaron <strong>{{ data().length }} registros</strong>.
+            Se consolidaron <strong>{{ filteredData().length }} registros</strong>.
 
-            <!-- UX FIX: Aquí usamos loadedCountry(), la verdad absoluta del dataset cargado -->
             @if (loadedCountry()) {
               <span class="date-badge" style="margin-left: 0.5rem; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb;">
                 📍 Mercado: {{ loadedCountry() }}
@@ -159,30 +153,61 @@
 
             @if (dynamicDateRange()) {
               <span class="date-badge" style="margin-left: 0.5rem;">
-                🗓️ Temporalidad: {{ dynamicDateRange() }}
+                🗓️ Temporalidad Actual: {{ dynamicDateRange() }}
               </span>
             }
           </p>
         </div>
       </div>
 
-      <div class="filters-panel fade-in">
-        <button class="filter-pill" [class.active]="selectedMetric() === 'total'" (click)="applyFilter('total')">📈 Engagement Total</button>
-        <button class="filter-pill" [class.active]="selectedMetric() === 'views'" (click)="applyFilter('views')">👁️ Vistas / Reproducciones</button>
-        <button class="filter-pill" [class.active]="selectedMetric() === 'likes'" (click)="applyFilter('likes')">❤️ Me Gusta</button>
-        <button class="filter-pill" [class.active]="selectedMetric() === 'comments'" (click)="applyFilter('comments')">💬 Comentarios</button>
+      <!-- UX REFACTOR: BARRA DE FILTRADO LOCAL PULIDA CON AUTO-CORRECCIÓN -->
+      <div class="local-filters-card fade-in" style="background: #ffffff; padding: 1.2rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);">
+
+        <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div style="width: 32px; height: 32px; border-radius: 8px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #3b82f6;">
+              📅
+            </div>
+            <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #111827;">Segmentar Datos:</h4>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; background: #f9fafb; padding: 0.25rem 0.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb;">
+              <label style="font-size: 0.8rem; font-weight: 600; color: #4b5563; margin: 0;">Desde:</label>
+              <!-- Usamos ngModelChange para invocar nuestra lógica de auto-corrección -->
+              <input type="date" [ngModel]="filterStartDate()" (ngModelChange)="onStartDateChange($event)"
+                     style="border: none; background: transparent; font-size: 0.85rem; outline: none; cursor: pointer; color: #111827;">
+            </div>
+
+            <span style="color: #9ca3af; font-weight: bold;">→</span>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem; background: #f9fafb; padding: 0.25rem 0.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb;">
+              <label style="font-size: 0.8rem; font-weight: 600; color: #4b5563; margin: 0;">Hasta:</label>
+              <!-- Usamos ngModelChange para invocar nuestra lógica de auto-corrección -->
+              <input type="date" [ngModel]="filterEndDate()" (ngModelChange)="onEndDateChange($event)"
+                     style="border: none; background: transparent; font-size: 0.85rem; outline: none; cursor: pointer; color: #111827;">
+            </div>
+          </div>
+        </div>
+
+        <!-- MÉTTRICAS -->
+        <div class="filters-panel" style="margin: 0; padding: 0; border: none; background: transparent; box-shadow: none;">
+          <button class="filter-pill" [class.active]="selectedMetric() === 'total'" (click)="applyFilter('total')">📈 Total</button>
+          <button class="filter-pill" [class.active]="selectedMetric() === 'views'" (click)="applyFilter('views')">👁️ Vistas</button>
+          <button class="filter-pill" [class.active]="selectedMetric() === 'likes'" (click)="applyFilter('likes')">❤️ Likes</button>
+          <button class="filter-pill" [class.active]="selectedMetric() === 'comments'" (click)="applyFilter('comments')">💬 Comentarios</button>
+        </div>
       </div>
 
+      <!-- GRÁFICAS -->
       <div class="charts-grid fade-in">
 
-        <!-- 1. Cuota de mercado global -->
         @if (marketShareChartOptions()) {
           <div class="chart-card">
             <div echarts [options]="marketShareChartOptions()!" style="height: 100%; width: 100%;"></div>
           </div>
         }
 
-        <!-- 2. Tarjetas de Competidores (Kpis) -->
         @if (competitorsKpi().length > 0) {
           <div class="chart-card kpi-container" style="display: flex; flex-direction: column; gap: 1rem; overflow-y: auto;">
 
@@ -253,21 +278,18 @@
           </div>
         }
 
-        <!-- 3. Evolución en el tiempo -->
         @if (chartOptions() && loadedNetwork() !== 'omnicanal') {
           <div class="chart-card" style="min-height: 380px;">
             <div echarts [options]="chartOptions()!" style="height: 100%; width: 100%;"></div>
           </div>
         }
 
-        <!-- 4. MASTER GRAPH OMNICANAL -->
         @if (masterChartOptions()) {
           <div class="chart-card" style="grid-column: 1 / -1; height: 450px;">
             <div echarts [options]="masterChartOptions()!" style="height: 100%; width: 100%;"></div>
           </div>
         }
 
-        <!-- 5. Cuadrante de Rendimiento -->
         @if (performanceChartOptions() && loadedNetwork() !== 'omnicanal') {
           <div class="chart-card" style="grid-column: 1 / -1; height: 500px;">
             <div echarts [options]="performanceChartOptions()!" style="height: 100%; width: 100%;"></div>
@@ -277,7 +299,7 @@
 
       <h4 class="section-title fade-in">Desglose de Contenido Extraído</h4>
       <div class="fade-in">
-        <app-apify-data-grid [data]="data()" [network]="loadedNetwork()"></app-apify-data-grid>
+        <app-apify-data-grid [data]="filteredData()" [network]="loadedNetwork()"></app-apify-data-grid>
       </div>
     }
 
@@ -290,4 +312,4 @@
       </div>
     }
   </main>
-</div>
+</div>-
