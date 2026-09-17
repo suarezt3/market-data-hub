@@ -19,7 +19,7 @@ $primary-hover: #4f46e5;
   grid-template-columns: 340px 1fr; /* Ligeramente más ancho para que respire la UI */
   min-height: 100vh;
   background-color: $bg-main;
-  font-family: 'Lato', sans-serif;
+  font-family: 'Lato', system-ui, -apple-system, sans-serif;
   color: $text-primary;
 }
 

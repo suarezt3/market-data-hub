@@ -31,7 +31,7 @@ export type KpiSortOption = 'followers' | 'views' | 'likes' | 'posts';
 })
 export class ApifyViewerComponent {
   private apifyService = inject(ApifyService);
-  private apifyChartService = inject(ApifyChartService);
+  public apifyChartService = inject(ApifyChartService);
 
   isLoading = signal<boolean>(false);
   error = signal<string | null>(null);
@@ -45,21 +45,24 @@ export class ApifyViewerComponent {
   selectedMetric = signal<ChartMetric>('total');
   kpiSortMetric = signal<KpiSortOption>('followers');
 
-  // Controles de extracción
   selectedCountry = signal<MarketCountry>('Colombia');
-  selectedNetwork = signal<string>('instagram'); 
+  selectedNetwork = signal<string>('youtube'); 
   actionType = signal<ApifyAction>('get-latest'); 
   targetUrlsInput = signal<string>(''); 
   resultsLimit = signal<number>(30);
   scrapeType = signal<string>('posts');
   scrapeStartDate = signal<string>('');
   
-  // Controles del Filtro Local
   filterStartDate = signal<string>('');
   filterEndDate = signal<string>('');
 
+  gridBrandFilter = signal<string>('ALL');
+  gridNetworkFilter = signal<string>('ALL'); 
+  gridContentTypeFilter = signal<string>('ALL');
+  gridSortMetric = signal<string>('date_desc');
+
   // ==========================================
-  // LÓGICA DE VALIDACIÓN DE FECHAS
+  // LÓGICA DE VALIDACIÓN Y UX CONDICIONAL
   // ==========================================
   
   onStartDateChange(newDate: string) {
@@ -78,8 +81,18 @@ export class ApifyViewerComponent {
     }
   }
 
+  showContentTypeFilter = computed(() => {
+    const mainNet = this.loadedNetwork();
+    const gridNet = this.gridNetworkFilter();
+    
+    if (mainNet === 'youtube' || mainNet === 'tiktok') return false;
+    if (mainNet === 'omnicanal' && (gridNet === 'youtube' || gridNet === 'tiktok')) return false;
+    
+    return true; 
+  });
+
   // ==========================================
-  // MOTOR REACTIVO
+  // MOTOR REACTIVO PRINCIPAL
   // ==========================================
 
   filteredData = computed(() => {
@@ -110,6 +123,72 @@ export class ApifyViewerComponent {
     });
   });
 
+  // ==========================================
+  // MOTOR REACTIVO ESPECÍFICO PARA EL GRID
+  // ==========================================
+
+  availableBrands = computed(() => {
+    const data = this.filteredData();
+    const brands = new Set<string>();
+    
+    data.forEach(item => {
+      const brand = this.apifyChartService.getNormalizedBrandName(item);
+      if (brand && brand !== 'Embajadores / Creadores' && brand !== 'Medios y Eventos B2B') {
+        brands.add(brand);
+      }
+    });
+    
+    return Array.from(brands).sort();
+  });
+
+  gridDisplayData = computed(() => {
+    let data = [...this.filteredData()]; 
+    const brandFilter = this.gridBrandFilter();
+    const networkFilter = this.gridNetworkFilter();
+    const contentTypeFilter = this.gridContentTypeFilter();
+    const sortOption = this.gridSortMetric();
+
+    if (networkFilter !== 'ALL') {
+      data = data.filter(item => item.__network === networkFilter);
+    }
+
+    if (brandFilter !== 'ALL') {
+      data = data.filter(item => this.apifyChartService.getNormalizedBrandName(item) === brandFilter);
+    }
+
+    if (this.showContentTypeFilter() && contentTypeFilter !== 'ALL') {
+      data = data.filter(item => item._contentType === contentTypeFilter);
+    }
+
+    data.sort((a, b) => {
+      const kpiA = a._kpi || {};
+      const kpiB = b._kpi || {};
+
+      switch (sortOption) {
+        case 'views_desc':
+          return (kpiB.postViews || 0) - (kpiA.postViews || 0);
+        case 'likes_desc':
+          return (kpiB.postLikes || 0) - (kpiA.postLikes || 0);
+        case 'comments_desc':
+          return (b.commentsCount || b.commentCount || 0) - (a.commentsCount || a.commentCount || 0);
+        case 'date_desc':
+        default:
+          const getMs = (item: any) => {
+            const d = item.time || item.timestamp || item.date || item.createTimeISO || item.createdAt;
+            if (typeof d === 'number') return d < 10000000000 ? d * 1000 : d;
+            return d ? new Date(d).getTime() : 0;
+          };
+          return getMs(b) - getMs(a);
+      }
+    });
+
+    return data;
+  });
+
+  // ==========================================
+  // GRÁFICAS Y KPIs COMPUTADOS
+  // ==========================================
+
   chartOptions = computed(() => {
     const data = this.filteredData();
     const net = this.loadedNetwork();
@@ -137,10 +216,6 @@ export class ApifyViewerComponent {
     if (!data.length || net !== 'omnicanal') return null;
     return this.apifyChartService.buildMasterOmnichannelChart(data, this.selectedMetric());
   });
-
-  // ==========================================
-  // KPIs Y MÉTRICAS
-  // ==========================================
 
   dynamicDateRange = computed(() => {
     const currentData = this.filteredData();
@@ -241,6 +316,60 @@ export class ApifyViewerComponent {
     'youtube': 'streamers/youtube-scraper'
   };
 
+  /**
+   * NUEVO HELPER: Normalizar y formatear la duración de cualquier red a formato MM:SS
+   */
+  private formatDuration(val: any): string | null {
+    if (!val) return null;
+    
+    // Si viene como string tipo "00:00:10" o "10:05" (Formato usual de YouTube)
+    if (typeof val === 'string' && val.includes(':')) {
+      const parts = val.split(':');
+      // Reducir "00:00:10" a "0:10" para ahorrar espacio visual
+      if (parts.length === 3 && parts[0] === '00') {
+         return `${parseInt(parts[1], 10)}:${parts[2]}`;
+      }
+      return val;
+    }
+    
+    // Si viene en segundos numéricos (Formato de TikTok o Instagram)
+    const secs = Number(val);
+    if (!isNaN(secs) && secs > 0) {
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = Math.floor(secs % 60);
+      
+      const sStr = s < 10 ? `0${s}` : `${s}`;
+      if (h > 0) {
+        const mStr = m < 10 ? `0${m}` : `${m}`;
+        return `${h}:${mStr}:${sStr}`;
+      }
+      return `${m}:${sStr}`;
+    }
+    
+    return null;
+  }
+
+  private getUnifiedContentType(net: string, item: any): string {
+    if (net === 'tiktok' || net === 'youtube') return 'video';
+    
+    if (net === 'instagram') {
+      const typeStr = (item.type || item.productType || '').toLowerCase();
+      if (typeStr.includes('video') || item.videoUrl) return 'video';
+      if (typeStr === 'sidecar' || typeStr === 'carousel_container' || item.carouselMedia) return 'carousel';
+      if (typeStr === 'image' || item.displayUrl) return 'image';
+      return 'unknown';
+    }
+
+    if (net === 'facebook') {
+      if (item.videoUrl || item.webVideoUrl || item.video) return 'video';
+      if (item.imageUrl || (item.images && item.images.length > 0) || (item.photos && item.photos.length > 0)) return 'image';
+      return 'text';
+    }
+
+    return 'unknown';
+  }
+
   private standardizeData(rawData: any[], fallbackNetwork: string): any[] {
     let processed: any[] = [];
     
@@ -257,12 +386,9 @@ export class ApifyViewerComponent {
         else net = fallbackNetwork !== 'omnicanal' ? fallbackNetwork : 'unknown';
       }
 
-      // ==========================================
-      // ADAPTADOR: INSTAGRAM REFACTORIZADO
-      // ==========================================
+      const uType = this.getUnifiedContentType(net, item);
+
       if (net === 'instagram') {
-        
-        // Escenario 1: El scraper extrajo 'Perfiles' (Incluye arreglo de posts internos)
         if (item.latestPosts || item.latestIgtvVideos) {
           const allPosts = [...(item.latestPosts || []), ...(item.latestIgtvVideos || [])];
           allPosts.forEach((post: any) => {
@@ -272,6 +398,8 @@ export class ApifyViewerComponent {
               ownerUsername: item.username,
               ownerProfilePicUrl: item.profilePicUrlHD || item.profilePicUrl,
               __network: 'instagram',
+              _contentType: this.getUnifiedContentType('instagram', post),
+              _duration: this.formatDuration(post.videoDuration || post.duration), // NUEVO
               _kpi: {
                 followers: item.followersCount || item.followsCount || 0, 
                 profileLikes: 0,
@@ -284,8 +412,6 @@ export class ApifyViewerComponent {
             });
           });
         } 
-        
-        // Escenario 2: El scraper extrajo 'Publicaciones' sueltas (El JSON que enviaste)
         else {
           processed.push({
             ...item,
@@ -293,11 +419,12 @@ export class ApifyViewerComponent {
             ownerUsername: item.ownerUsername || item.owner?.username || 'Desconocido',
             ownerProfilePicUrl: item.ownerProfilePicUrl || item.owner?.profile_pic_url,
             __network: 'instagram',
+            _contentType: uType,
+            _duration: this.formatDuration(item.videoDuration || item.duration), // NUEVO
             _kpi: {
-              // Si la data es un Post, IG omite el dato de seguidores del creador. Asignamos 0 como fallback real.
               followers: item.followersCount || item.owner?.followersCount || 0, 
               profileLikes: 0, 
-              postLikes: item.likesCount || 0, // <-- FIX: Aquí capturamos los likes del post
+              postLikes: item.likesCount || 0, 
               profileViews: 0, 
               postViews: item.videoViewCount || item.viewCount || item.playCount || 0,
               profilePosts: 0, 
@@ -306,10 +433,6 @@ export class ApifyViewerComponent {
           });
         }
       } 
-      
-      // ==========================================
-      // ADAPTADORES: OTRAS PLATAFORMAS
-      // ==========================================
       else if (net === 'tiktok') {
         processed.push({
           ...item,
@@ -318,6 +441,8 @@ export class ApifyViewerComponent {
           ownerProfilePicUrl: item.authorMeta?.avatar || item.author?.avatarLarger,
           url: item.webVideoUrl || item.videoUrl || item.shareUrl,
           __network: 'tiktok',
+          _contentType: uType,
+          _duration: this.formatDuration(item.videoMeta?.duration || item.duration), // NUEVO
           _kpi: {
              followers: item.authorMeta?.fans || item.authorStats?.followerCount || 0,
              profileLikes: item.authorMeta?.heart || item.authorStats?.heartCount || 0,
@@ -337,6 +462,8 @@ export class ApifyViewerComponent {
           ownerProfilePicUrl: isPost ? item.user?.profilePic : item.profilePictureUrl,
           url: isPost ? (item.url || item.topLevelUrl) : (item.pageUrl || item.facebookUrl),
           __network: 'facebook',
+          _contentType: uType,
+          _duration: this.formatDuration(item.duration || item.video_duration), // NUEVO
           _kpi: {
              followers: isPost ? 0 : (item.followers || item.likes || 0),
              profileLikes: 0, postLikes: isPost ? (item.likes || item.reactionLikeCount || 0) : 0, 
@@ -346,22 +473,29 @@ export class ApifyViewerComponent {
         });
       } 
       else if (net === 'youtube') {
+        const isVideo = item.type === 'video' || item.videoId || item.url?.includes('watch');
         processed.push({
           ...item,
-          ownerFullName: item.channelName,
-          ownerUsername: item.channelUsername,
-          ownerProfilePicUrl: item.channelAvatarUrl,
+          ownerFullName: item.channelName || item.aboutChannelInfo?.channelName,
+          ownerUsername: item.channelUsername || item.aboutChannelInfo?.channelUsername,
+          ownerProfilePicUrl: item.channelAvatarUrl || item.aboutChannelInfo?.channelAvatarUrl,
           __network: 'youtube',
+          _contentType: uType,
+          _duration: this.formatDuration(item.duration), // NUEVO
           _kpi: {
-             followers: item.numberOfSubscribers || 0, profileLikes: 0, postLikes: 0,
-             profileViews: item.channelTotalViews || 0, postViews: 0, 
-             profilePosts: item.channelTotalVideos || 0, postCount: 0
+             followers: item.numberOfSubscribers || item.aboutChannelInfo?.numberOfSubscribers || 0, 
+             profileLikes: 0, 
+             postLikes: item.likes || 0, 
+             profileViews: item.channelTotalViews || item.aboutChannelInfo?.channelTotalViews || 0, 
+             postViews: item.viewCount || 0, 
+             profilePosts: item.channelTotalVideos || item.aboutChannelInfo?.channelTotalVideos || 0, 
+             postCount: isVideo ? 1 : 0
           }
         });
       } 
       else {
         processed.push({ 
-          ...item, __network: net,
+          ...item, __network: net, _contentType: 'unknown',
           _kpi: { followers: item.followersCount || 0, profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, profilePosts: item.postsCount || 0, postCount: 1 }
         });
       }
@@ -581,10 +715,6 @@ export class ApifyViewerComponent {
     });
   }
 
-  // ==========================================
-  // HELPER METODOS Y PATRÓN ADAPTER PARA APIFY
-  // ==========================================
-  
   private processDataset(rawData: any[], network: string, country: string) {
     const cleanData = this.standardizeData(rawData, network);
     this.data.set(cleanData); 
@@ -614,6 +744,11 @@ export class ApifyViewerComponent {
     this.loadedCountry.set(''); 
     this.filterStartDate.set('');
     this.filterEndDate.set('');
+    
+    this.gridBrandFilter.set('ALL');
+    this.gridNetworkFilter.set('ALL');
+    this.gridContentTypeFilter.set('ALL');
+    this.gridSortMetric.set('date_desc');
   }
 
   private buildInputPayload(network: string, urls: string[]) {
