@@ -8,6 +8,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ==========================================
+// CONFIGURACIÓN DE TAREAS (ZERO-TOUCH GOVERNANCE)
+// ==========================================
+// Diccionario que mapea Apify Task IDs a sus respectivos Mercados.
+// Aquí registrarás las futuras tareas a medida que las crees.
+const TASK_COUNTRY_MAP: Record<string, string> = {
+  '8ABZCm00vuO1oCoT3': 'Colombia', // Instagram Post COL
+  // 'AQUI_IRÁ_EL_ID_DE_MEXICO': 'México',
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -18,7 +28,6 @@ serve(async (req) => {
 
     const { action = 'run', actorId, inputPayload, runId, country, startDate, endDate } = body;
 
-    // FIX: Agregamos 'update-run' a las acciones que no necesitan actorId obligatorio
     if (!actorId && action !== 'list-runs' && action !== 'get-run-data' && action !== 'update-run') {
       throw new Error('Bad Request: El parámetro actorId es obligatorio.');
     }
@@ -26,7 +35,6 @@ serve(async (req) => {
     const apifyToken = Deno.env.get('APIFY_API_TOKEN');
     if (!apifyToken) throw new Error('Configuración: APIFY_API_TOKEN no está definido.');
 
-    // INSTANCIAMOS SUPABASE PARA LA METADATA
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -85,6 +93,20 @@ serve(async (req) => {
 
       responseData = runs.items.map(r => {
         const meta = metaMap[r.id];
+
+        // ----------------------------------------------------
+        // LÓGICA DE INFERENCIA DE MERCADO
+        // ----------------------------------------------------
+        let derivedCountry = meta?.country;
+
+        // Si no hay edición manual en base de datos, revisamos si viene de una Tarea (Task)
+        if (!derivedCountry && r.actorTaskId) {
+          derivedCountry = TASK_COUNTRY_MAP[r.actorTaskId];
+        }
+
+        // Fallback final de seguridad
+        derivedCountry = derivedCountry || 'Colombia';
+
         return {
           id: r.id,
           status: r.status,
@@ -92,7 +114,8 @@ serve(async (req) => {
           finishedAt: r.finishedAt,
           usageTotalUsd: r.usageTotalUsd || 0,
           actorId: r.actId,
-          country: meta?.country || 'Colombia',
+          actorTaskId: r.actorTaskId, // Enviamos el ID de la tarea al frontend por transparencia
+          country: derivedCountry,
           inputStartDate: meta?.start_date,
           inputEndDate: meta?.end_date
         };
@@ -109,15 +132,10 @@ serve(async (req) => {
       const dataset = await client.dataset(runInfo.defaultDatasetId).listItems();
       responseData = dataset.items;
 
-    // ==========================================
-    // NUEVA ACCIÓN: ACTUALIZAR METADATA
-    // ==========================================
     } else if (action === 'update-run') {
       if (!runId || !country) throw new Error('Los parámetros runId y country son obligatorios para actualizar.');
       console.log(`[Apify Runner] Actualizando metadata del Run ID: ${runId} a mercado: ${country}`);
 
-      // UPSERT: Si el run ya tiene metadata, actualiza el país. Si es un run programado automático (nuevo), lo inserta.
-      // IMPORTANTE: Asegúrate de que 'run_id' esté marcado como Primary Key o Unique en Supabase para que onConflict funcione.
       const { error: dbError } = await supabase
         .from('apify_run_metadata')
         .upsert(
@@ -131,7 +149,7 @@ serve(async (req) => {
       }
 
       returnedRunId = runId;
-      responseData = []; // No necesitamos retornar el dataset, solo el status 200
+      responseData = [];
 
     } else {
       throw new Error('Acción no soportada por la Edge Function.');
