@@ -1,13 +1,13 @@
 // src/app/components/apify-viewer/apify-viewer.component.ts
-import { Component, inject, signal, computed } from '@angular/core';
-import { CommonModule, TitleCasePipe } from '@angular/common'; 
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { CommonModule, TitleCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
-import { ApifyService, ApifyPayload, ApifyAction, ApifyRunRecord, ApifyResponse, MarketCountry } from '../../services/apify.service';
+import { ApifyService, ApifyRunRecord, ApifyResponse, MarketCountry } from '../../services/apify.service';
 import { ApifyChartService, ChartMetric } from '../../services/apify-chart.service';
 
 import { ApifyDataGridComponent } from '../apify-data-grid/apify-data-grid.component';
@@ -19,52 +19,50 @@ export type KpiSortOption = 'followers' | 'views' | 'likes' | 'posts';
   selector: 'app-apify-viewer',
   standalone: true,
   imports: [
-    CommonModule,     
-    TitleCasePipe,    
-    FormsModule, 
-    NgxEchartsDirective, 
-    ApifyDataGridComponent, 
+    CommonModule,
+    TitleCasePipe,
+    FormsModule,
+    NgxEchartsDirective,
+    ApifyDataGridComponent,
     ApifyRunsTableComponent
-  ], 
+  ],
   templateUrl: './apify-viewer.component.html',
   styleUrl: './apify-viewer.component.scss'
 })
-export class ApifyViewerComponent {
+export class ApifyViewerComponent implements OnInit {
   private apifyService = inject(ApifyService);
   public apifyChartService = inject(ApifyChartService);
 
   isLoading = signal<boolean>(false);
   error = signal<string | null>(null);
-  
+
   data = signal<any[]>([]);
   runsList = signal<ApifyRunRecord[]>([]);
 
-  loadedNetwork = signal<string>(''); 
-  loadedCountry = signal<string>(''); 
-  
+  loadedNetwork = signal<string>('');
+  loadedCountry = signal<string>('');
+
   selectedMetric = signal<ChartMetric>('total');
   kpiSortMetric = signal<KpiSortOption>('followers');
 
   selectedCountry = signal<MarketCountry>('Colombia');
-  selectedNetwork = signal<string>('youtube'); 
-  actionType = signal<ApifyAction>('get-latest'); 
-  targetUrlsInput = signal<string>(''); 
-  resultsLimit = signal<number>(30);
-  scrapeType = signal<string>('posts');
-  scrapeStartDate = signal<string>('');
-  
+
   filterStartDate = signal<string>('');
   filterEndDate = signal<string>('');
 
   gridBrandFilter = signal<string>('ALL');
-  gridNetworkFilter = signal<string>('ALL'); 
+  gridNetworkFilter = signal<string>('ALL');
   gridContentTypeFilter = signal<string>('ALL');
   gridSortMetric = signal<string>('date_desc');
+
+  ngOnInit() {
+    this.loadHistory();
+  }
 
   // ==========================================
   // LÓGICA DE VALIDACIÓN Y UX CONDICIONAL
   // ==========================================
-  
+
   onStartDateChange(newDate: string) {
     this.filterStartDate.set(newDate);
     const end = this.filterEndDate();
@@ -84,11 +82,11 @@ export class ApifyViewerComponent {
   showContentTypeFilter = computed(() => {
     const mainNet = this.loadedNetwork();
     const gridNet = this.gridNetworkFilter();
-    
-    if (mainNet === 'youtube' || mainNet === 'tiktok') return false;
-    if (mainNet === 'omnicanal' && (gridNet === 'youtube' || gridNet === 'tiktok')) return false;
-    
-    return true; 
+
+    if (mainNet === 'youtube') return false;
+    if (mainNet === 'omnicanal' && gridNet === 'youtube') return false;
+
+    return true;
   });
 
   // ==========================================
@@ -108,7 +106,7 @@ export class ApifyViewerComponent {
     return currentData.filter(item => {
       const rawDate = item.time || item.timestamp || item.date || item.createTimeISO || item.createdAt || item.videoMeta?.createTime || item.createTime;
       let itemMs = 0;
-      
+
       if (typeof rawDate === 'number') {
         itemMs = rawDate < 10000000000 ? rawDate * 1000 : rawDate;
       } else if (item.createTime && typeof item.createTime === 'number') {
@@ -117,8 +115,8 @@ export class ApifyViewerComponent {
         itemMs = rawDate ? new Date(rawDate).getTime() : 0;
       }
 
-      if (!itemMs || isNaN(itemMs)) return true; 
-      
+      if (!itemMs || isNaN(itemMs)) return true;
+
       return itemMs >= startMs && itemMs <= endMs;
     });
   });
@@ -130,19 +128,19 @@ export class ApifyViewerComponent {
   availableBrands = computed(() => {
     const data = this.filteredData();
     const brands = new Set<string>();
-    
+
     data.forEach(item => {
       const brand = this.apifyChartService.getNormalizedBrandName(item);
       if (brand && brand !== 'Embajadores / Creadores' && brand !== 'Medios y Eventos B2B') {
         brands.add(brand);
       }
     });
-    
+
     return Array.from(brands).sort();
   });
 
   gridDisplayData = computed(() => {
-    let data = [...this.filteredData()]; 
+    let data = [...this.filteredData()];
     const brandFilter = this.gridBrandFilter();
     const networkFilter = this.gridNetworkFilter();
     const contentTypeFilter = this.gridContentTypeFilter();
@@ -242,7 +240,7 @@ export class ApifyViewerComponent {
 
     const brandNetworkStats = new Map<string, Record<string, {
       followers: number, profileLikes: number, postLikesSum: number,
-      profileViews: number, postViewsSum: number, 
+      profileViews: number, postViewsSum: number,
       profilePosts: number, postCountSum: number, avatar: string | null
     }>>();
 
@@ -261,7 +259,7 @@ export class ApifyViewerComponent {
       if (!networkMap[net]) {
         networkMap[net] = {
           followers: kpi.followers, profileLikes: kpi.profileLikes, postLikesSum: kpi.postLikes,
-          profileViews: kpi.profileViews, postViewsSum: kpi.postViews, 
+          profileViews: kpi.profileViews, postViewsSum: kpi.postViews,
           profilePosts: kpi.profilePosts, postCountSum: kpi.postCount, avatar
         };
       } else {
@@ -270,8 +268,8 @@ export class ApifyViewerComponent {
         ex.profileLikes = Math.max(ex.profileLikes, kpi.profileLikes);
         ex.profileViews = Math.max(ex.profileViews, kpi.profileViews);
         ex.profilePosts = Math.max(ex.profilePosts, kpi.profilePosts);
-        ex.postLikesSum += kpi.postLikes; 
-        ex.postViewsSum += kpi.postViews; 
+        ex.postLikesSum += kpi.postLikes;
+        ex.postViewsSum += kpi.postViews;
         ex.postCountSum += kpi.postCount;
 
         if (avatar && !ex.avatar) ex.avatar = avatar;
@@ -305,40 +303,27 @@ export class ApifyViewerComponent {
         if (sortMetric === 'views') return b.accountViews - a.accountViews;
         if (sortMetric === 'likes') return b.accountLikes - a.accountLikes;
         if (sortMetric === 'posts') return b.accountPosts - a.accountPosts;
-        return b.followers - a.followers; 
+        return b.followers - a.followers;
       });
   });
 
-  private readonly ACTORS_MAP: Record<string, string> = {
-    'facebook': 'apify/facebook-posts-scraper',
-    'instagram': 'apify/instagram-scraper',
-    'tiktok': 'clockworks/tiktok-scraper',
-    'youtube': 'streamers/youtube-scraper'
-  };
-
-  /**
-   * NUEVO HELPER: Normalizar y formatear la duración de cualquier red a formato MM:SS
-   */
   private formatDuration(val: any): string | null {
     if (!val) return null;
-    
-    // Si viene como string tipo "00:00:10" o "10:05" (Formato usual de YouTube)
+
     if (typeof val === 'string' && val.includes(':')) {
       const parts = val.split(':');
-      // Reducir "00:00:10" a "0:10" para ahorrar espacio visual
       if (parts.length === 3 && parts[0] === '00') {
          return `${parseInt(parts[1], 10)}:${parts[2]}`;
       }
       return val;
     }
-    
-    // Si viene en segundos numéricos (Formato de TikTok o Instagram)
+
     const secs = Number(val);
     if (!isNaN(secs) && secs > 0) {
       const h = Math.floor(secs / 3600);
       const m = Math.floor((secs % 3600) / 60);
       const s = Math.floor(secs % 60);
-      
+
       const sStr = s < 10 ? `0${s}` : `${s}`;
       if (h > 0) {
         const mStr = m < 10 ? `0${m}` : `${m}`;
@@ -346,13 +331,18 @@ export class ApifyViewerComponent {
       }
       return `${m}:${sStr}`;
     }
-    
+
     return null;
   }
 
   private getUnifiedContentType(net: string, item: any): string {
-    if (net === 'tiktok' || net === 'youtube') return 'video';
-    
+    if (net === 'youtube') return 'video';
+
+    if (net === 'tiktok') {
+      if (item.isSlideshow || (item.mediaUrls && item.mediaUrls.length > 0)) return 'carousel';
+      return 'video';
+    }
+
     if (net === 'instagram') {
       const typeStr = (item.type || item.productType || '').toLowerCase();
       if (typeStr.includes('video') || item.videoUrl) return 'video';
@@ -372,13 +362,13 @@ export class ApifyViewerComponent {
 
   private standardizeData(rawData: any[], fallbackNetwork: string): any[] {
     let processed: any[] = [];
-    
+
     rawData.forEach(item => {
       let net = item.__network;
-      
+
       if (!net || net === 'omnicanal' || net === 'unknown') {
         const urlStr = String(item.url || item.facebookUrl || item.pageUrl || item.webVideoUrl || item.channelUrl || '').toLowerCase();
-        
+
         if (item.authorMeta || item.authorStats || urlStr.includes('tiktok.com')) net = 'tiktok';
         else if (item.facebookUrl || item.pageName || urlStr.includes('facebook.com')) net = 'facebook';
         else if (item.channelName || item.channelTotalVideos || urlStr.includes('youtube.com')) net = 'youtube';
@@ -399,19 +389,19 @@ export class ApifyViewerComponent {
               ownerProfilePicUrl: item.profilePicUrlHD || item.profilePicUrl,
               __network: 'instagram',
               _contentType: this.getUnifiedContentType('instagram', post),
-              _duration: this.formatDuration(post.videoDuration || post.duration), // NUEVO
+              _duration: this.formatDuration(post.videoDuration || post.duration),
               _kpi: {
-                followers: item.followersCount || item.followsCount || 0, 
+                followers: item.followersCount || item.followsCount || 0,
                 profileLikes: 0,
-                postLikes: post.likesCount || post.likes || 0, 
+                postLikes: post.likesCount || post.likes || 0,
                 profileViews: 0,
                 postViews: post.videoViewCount || post.videoPlayCount || post.playCount || post.viewsCount || 0,
-                profilePosts: item.postsCount || 0, 
+                profilePosts: item.postsCount || 0,
                 postCount: 1
               }
             });
           });
-        } 
+        }
         else {
           processed.push({
             ...item,
@@ -420,19 +410,19 @@ export class ApifyViewerComponent {
             ownerProfilePicUrl: item.ownerProfilePicUrl || item.owner?.profile_pic_url,
             __network: 'instagram',
             _contentType: uType,
-            _duration: this.formatDuration(item.videoDuration || item.duration), // NUEVO
+            _duration: this.formatDuration(item.videoDuration || item.duration),
             _kpi: {
-              followers: item.followersCount || item.owner?.followersCount || 0, 
-              profileLikes: 0, 
-              postLikes: item.likesCount || 0, 
-              profileViews: 0, 
+              followers: item.followersCount || item.owner?.followersCount || 0,
+              profileLikes: 0,
+              postLikes: item.likesCount || 0,
+              profileViews: 0,
               postViews: item.videoViewCount || item.viewCount || item.playCount || 0,
-              profilePosts: 0, 
+              profilePosts: 0,
               postCount: 1
             }
           });
         }
-      } 
+      }
       else if (net === 'tiktok') {
         processed.push({
           ...item,
@@ -442,7 +432,7 @@ export class ApifyViewerComponent {
           url: item.webVideoUrl || item.videoUrl || item.shareUrl,
           __network: 'tiktok',
           _contentType: uType,
-          _duration: this.formatDuration(item.videoMeta?.duration || item.duration), // NUEVO
+          _duration: this.formatDuration(item.videoMeta?.duration || item.duration),
           _kpi: {
              followers: item.authorMeta?.fans || item.authorStats?.followerCount || 0,
              profileLikes: item.authorMeta?.heart || item.authorStats?.heartCount || 0,
@@ -452,7 +442,7 @@ export class ApifyViewerComponent {
              profilePosts: item.authorMeta?.video || item.authorStats?.videoCount || 0, postCount: 1
           }
         });
-      } 
+      }
       else if (net === 'facebook') {
         const isPost = !!item.postId || item.text !== undefined;
         processed.push({
@@ -463,15 +453,15 @@ export class ApifyViewerComponent {
           url: isPost ? (item.url || item.topLevelUrl) : (item.pageUrl || item.facebookUrl),
           __network: 'facebook',
           _contentType: uType,
-          _duration: this.formatDuration(item.duration || item.video_duration), // NUEVO
+          _duration: this.formatDuration(item.duration || item.video_duration),
           _kpi: {
              followers: isPost ? 0 : (item.followers || item.likes || 0),
-             profileLikes: 0, postLikes: isPost ? (item.likes || item.reactionLikeCount || 0) : 0, 
-             profileViews: 0, postViews: isPost ? (item.viewsCount || item.videoPostViewCount || 0) : 0, 
+             profileLikes: 0, postLikes: isPost ? (item.likes || item.reactionLikeCount || 0) : 0,
+             profileViews: 0, postViews: isPost ? (item.viewsCount || item.videoPostViewCount || 0) : 0,
              profilePosts: 0, postCount: isPost ? 1 : 0
           }
         });
-      } 
+      }
       else if (net === 'youtube') {
         const isVideo = item.type === 'video' || item.videoId || item.url?.includes('watch');
         processed.push({
@@ -481,20 +471,20 @@ export class ApifyViewerComponent {
           ownerProfilePicUrl: item.channelAvatarUrl || item.aboutChannelInfo?.channelAvatarUrl,
           __network: 'youtube',
           _contentType: uType,
-          _duration: this.formatDuration(item.duration), // NUEVO
+          _duration: this.formatDuration(item.duration),
           _kpi: {
-             followers: item.numberOfSubscribers || item.aboutChannelInfo?.numberOfSubscribers || 0, 
-             profileLikes: 0, 
-             postLikes: item.likes || 0, 
-             profileViews: item.channelTotalViews || item.aboutChannelInfo?.channelTotalViews || 0, 
-             postViews: item.viewCount || 0, 
-             profilePosts: item.channelTotalVideos || item.aboutChannelInfo?.channelTotalVideos || 0, 
+             followers: item.numberOfSubscribers || item.aboutChannelInfo?.numberOfSubscribers || 0,
+             profileLikes: 0,
+             postLikes: item.likes || 0,
+             profileViews: item.channelTotalViews || item.aboutChannelInfo?.channelTotalViews || 0,
+             postViews: item.viewCount || 0,
+             profilePosts: item.channelTotalVideos || item.aboutChannelInfo?.channelTotalVideos || 0,
              postCount: isVideo ? 1 : 0
           }
         });
-      } 
+      }
       else {
-        processed.push({ 
+        processed.push({
           ...item, __network: net, _contentType: 'unknown',
           _kpi: { followers: item.followersCount || 0, profileLikes: 0, postLikes: 0, profileViews: 0, postViews: 0, profilePosts: item.postsCount || 0, postCount: 1 }
         });
@@ -504,52 +494,14 @@ export class ApifyViewerComponent {
     return processed;
   }
 
-  fetchData() {
-    const rawUrls = this.targetUrlsInput().split('\n').map(u => u.trim()).filter(u => u !== '');
-    if (rawUrls.length === 0 && this.actionType() === 'run') {
-      this.error.set('Por favor, ingresa al menos una URL válida.');
-      return;
-    }
+  // ==========================================
+  // CARGA DE DATOS Y EVENTOS
+  // ==========================================
 
+  loadHistory() {
     this.resetState();
-    const network = this.selectedNetwork();
-    const action = this.actionType();
-    const currentCountry = this.selectedCountry();
-    
-    if (action === 'list-runs') {
-      this.fetchGlobalRunsHistory();
-      return;
-    }
+    this.isLoading.set(true);
 
-    if (network === 'facebook') {
-      this.fetchFacebookHybrid(action, rawUrls);
-      return;
-    }
-
-    const payload: ApifyPayload = {
-      action: action,
-      actorId: this.ACTORS_MAP[network],
-      country: currentCountry,
-      ...(action === 'run' ? { 
-        inputPayload: this.buildInputPayload(network, rawUrls),
-        startDate: this.scrapeStartDate() || undefined
-      } : {})
-    };
-
-    this.apifyService.executeScraper(payload).subscribe({
-      next: (response) => {
-        if (response.success && response.data) {
-          this.processDataset(response.data, network, currentCountry);
-        } else {
-          this.error.set('La ejecución finalizó sin datos.');
-        }
-        this.isLoading.set(false);
-      },
-      error: (err) => { this.error.set(err.message); this.isLoading.set(false); }
-    });
-  }
-
-  private fetchGlobalRunsHistory() {
     this.apifyService.executeScraper({ action: 'list-runs' }).subscribe({
       next: (response) => {
         if (response.success && response.data) {
@@ -557,9 +509,9 @@ export class ApifyViewerComponent {
 
           const fbPosts = allRuns.filter(r => r.actorId === 'KoJrdxJCTtpon81KY' || r.actorId === 'apify/facebook-posts-scraper');
           const fbPages = allRuns.filter(r => r.actorId === '4Hv5RhChiaDk6iwad' || r.actorId === 'apify/facebook-pages-scraper');
-          
-          const otherRuns = allRuns.filter(r => 
-            r.actorId !== 'KoJrdxJCTtpon81KY' && r.actorId !== 'apify/facebook-posts-scraper' && 
+
+          const otherRuns = allRuns.filter(r =>
+            r.actorId !== 'KoJrdxJCTtpon81KY' && r.actorId !== 'apify/facebook-posts-scraper' &&
             r.actorId !== '4Hv5RhChiaDk6iwad' && r.actorId !== 'apify/facebook-pages-scraper'
           );
 
@@ -571,7 +523,7 @@ export class ApifyViewerComponent {
 
             finalRuns.push({
               id: `HYBRID|${latestPost?.id || 'none'}|${latestPage?.id || 'none'}`,
-              actorId: 'Facebook (Consolidado)', 
+              actorId: 'Facebook (Consolidado)',
               status: (latestPost?.status === 'SUCCEEDED' || latestPage?.status === 'SUCCEEDED') ? 'SUCCEEDED' : 'FAILED',
               startedAt: latestPost?.startedAt || latestPage?.startedAt || new Date().toISOString(),
               finishedAt: latestPost?.finishedAt || latestPage?.finishedAt || new Date().toISOString(),
@@ -593,47 +545,20 @@ export class ApifyViewerComponent {
     });
   }
 
-  private fetchFacebookHybrid(action: ApifyAction, urls: string[]) {
-    const postsActor = 'apify/facebook-posts-scraper';
-    const pagesActor = '4Hv5RhChiaDk6iwad';
-    const currentCountry = this.selectedCountry();
-
-    const payloadPosts: ApifyPayload = { 
-      action, actorId: postsActor, country: currentCountry,
-      ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-posts', urls), startDate: this.scrapeStartDate() || undefined } : {}) 
-    };
-    
-    const payloadPages: ApifyPayload = { 
-      action, actorId: pagesActor, country: currentCountry,
-      ...(action === 'run' ? { inputPayload: this.buildInputPayload('facebook-pages', urls) } : {}) 
-    };
-
-    const req1 = this.apifyService.executeScraper(payloadPosts).pipe(catchError(() => of({ success: true, data: [] } as ApifyResponse)));
-    const req2 = this.apifyService.executeScraper(payloadPages).pipe(catchError(() => of({ success: true, data: [] } as ApifyResponse)));
-
-    forkJoin([req1, req2]).subscribe(([res1, res2]) => {
-      const combinedData = [...(res1.data || []), ...(res2.data || [])];
-      if (combinedData.length > 0) {
-        this.processDataset(combinedData, 'facebook', currentCountry);
-      } else {
-        this.error.set('La ejecución finalizó sin datos.');
-      }
-      this.isLoading.set(false);
-    });
-  }
-
   loadSpecificRun(runId: string, actorInternalId: string) {
     this.resetState();
+    this.isLoading.set(true);
 
     const historyRun = this.runsList().find(r => r.id === runId);
     const runCountry = historyRun?.country || 'Colombia';
+    this.selectedCountry.set(runCountry as MarketCountry);
 
     if (runId.startsWith('HYBRID|')) {
       const parts = runId.split('|');
       const postsRunId = parts[1];
       const pagesRunId = parts[2];
       const reqs = [];
-      
+
       if (postsRunId && postsRunId !== 'none') {
         reqs.push(this.apifyService.executeScraper({ action: 'get-run-data', actorId: 'KoJrdxJCTtpon81KY', runId: postsRunId })
           .pipe(catchError(() => of({ success: true, data: [] } as ApifyResponse))));
@@ -652,7 +577,6 @@ export class ApifyViewerComponent {
       forkJoin(reqs).subscribe(results => {
         const combined = results.map(r => r.data || []).flat();
         if (combined.length > 0) {
-          this.loadedNetwork.set('facebook');
           this.processDataset(combined, 'facebook', runCountry);
         } else {
           this.error.set('No se pudo recuperar el dataset híbrido.');
@@ -661,18 +585,18 @@ export class ApifyViewerComponent {
       });
       return;
     }
-    
+
     let targetActorId = actorInternalId;
-    let network = 'instagram'; 
-    
+    let network = 'instagram';
+
     const reverseActorMap: Record<string, string> = {
       'KoJrdxJCTtpon81KY': 'apify/facebook-posts-scraper',
       '4Hv5RhChiaDk6iwad': 'apify/facebook-pages-scraper',
       'shu8hvrXbJbY3Eb9W': 'apify/instagram-scraper',
       'GdWCkxBtKWOsKjdch': 'clockworks/tiktok-scraper',
-      '0FXVyOXXEmdGcV88a': 'clockworks/tiktok-scraper', 
+      '0FXVyOXXEmdGcV88a': 'clockworks/tiktok-scraper',
       'h7sDV53CddomktSi5': 'streamers/youtube-scraper',
-      'nFJndFXA5zjCTuudP': 'apify/google-search-scraper' 
+      'nFJndFXA5zjCTuudP': 'apify/google-search-scraper'
     };
 
     if (reverseActorMap[actorInternalId]) targetActorId = reverseActorMap[actorInternalId];
@@ -686,8 +610,7 @@ export class ApifyViewerComponent {
           const sample = response.data[0];
           if (sample.facebookUrl || sample.pageUrl) network = 'facebook';
           if (sample.channelName && sample.channelTotalVideos) network = 'youtube';
-          
-          this.selectedNetwork.set(network);
+
           this.processDataset(response.data, network, runCountry);
         } else {
           this.error.set('No se pudo recuperar el dataset.');
@@ -698,8 +621,28 @@ export class ApifyViewerComponent {
     });
   }
 
+  // FIX: Type Assertion aplicado para evitar errores de tipado estricto
+  onRunCountryChanged(event: {runId: string, newCountry: string}) {
+    // 1. Optimistic UI Update: Actualizamos la tabla visualmente al instante
+    this.runsList.update(runs => runs.map(r =>
+      r.id === event.runId ? ({ ...r, country: event.newCountry as MarketCountry } as ApifyRunRecord) : r
+    ));
+
+    // 2. Persistencia en Supabase
+    if ((this.apifyService as any).updateRunCountry) {
+      (this.apifyService as any).updateRunCountry(event.runId, event.newCountry).subscribe({
+        error: () => {
+          this.error.set('No se pudo guardar el mercado en Supabase. Se revertirá al recargar.');
+        }
+      });
+    } else {
+      console.warn('Backend Reminder: Falta implementar el método updateRunCountry en apify.service.ts para guardar en Supabase.');
+    }
+  }
+
   fetchOmnichannelData() {
     this.resetState();
+    this.isLoading.set(true);
     const currentCountry = this.selectedCountry();
 
     this.apifyService.getOmnichannelLatestData(currentCountry).subscribe({
@@ -717,12 +660,12 @@ export class ApifyViewerComponent {
 
   private processDataset(rawData: any[], network: string, country: string) {
     const cleanData = this.standardizeData(rawData, network);
-    this.data.set(cleanData); 
+    this.data.set(cleanData);
     this.loadedNetwork.set(network);
-    this.loadedCountry.set(country); 
-    
-    const hasEngagement = cleanData.some(item => 
-      item._kpi.postLikes > 0 || item._kpi.profileLikes > 0 || 
+    this.loadedCountry.set(country);
+
+    const hasEngagement = cleanData.some(item =>
+      item._kpi.postLikes > 0 || item._kpi.profileLikes > 0 ||
       (item.commentsCount && item.commentsCount > 0)
     );
     this.selectedMetric.set(hasEngagement ? 'total' : 'views');
@@ -737,48 +680,13 @@ export class ApifyViewerComponent {
   }
 
   private resetState() {
-    this.isLoading.set(true);
     this.error.set(null);
     this.data.set([]);
-    this.runsList.set([]);
-    this.loadedCountry.set(''); 
     this.filterStartDate.set('');
     this.filterEndDate.set('');
-    
     this.gridBrandFilter.set('ALL');
     this.gridNetworkFilter.set('ALL');
     this.gridContentTypeFilter.set('ALL');
     this.gridSortMetric.set('date_desc');
-  }
-
-  private buildInputPayload(network: string, urls: string[]) {
-    const limit = this.resultsLimit();
-    const startDate = this.scrapeStartDate();
-    
-    const startUrlsObj = urls.map(url => {
-      if (network === 'youtube' && !url.includes('/videos') && !url.includes('/shorts')) {
-        return { url: url.endsWith('/') ? `${url}videos` : `${url}/videos` };
-      }
-      return { url: url };
-    });
-
-    if (network === 'youtube') {
-      return {
-        startUrls: startUrlsObj,
-        maxResults: limit,
-        maxResultsShorts: limit,
-        downloadSubtitles: false,
-        ...(startDate ? { publishedAfter: startDate } : {})
-      };
-    }
-
-    if (network === 'facebook-pages') {
-      return { startUrls: startUrlsObj };
-    }
-
-    return { 
-      startUrls: startUrlsObj,
-      resultsLimit: limit
-    };
   }
 }

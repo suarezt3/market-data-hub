@@ -1,139 +1,88 @@
 <!-- src/app/components/apify-viewer/apify-viewer.component.html -->
 <div class="dashboard-layout">
-  
-  <!-- PANEL LATERAL (CONTROLES DE EXTRACCIÓN) -->
+
+  <!-- PANEL LATERAL (MODERNIZADO Y CON OMNICANAL RESTAURADO) -->
   <aside class="sidebar-controls">
     <div class="brand-header">
       <h2>Market Intelligence</h2>
       <p>Análisis de Competencia LATAM</p>
     </div>
 
-    <div class="control-group fade-in">
-      <label>1. Mercado a Analizar</label>
-      <select [(ngModel)]="selectedCountry" class="form-input">
+    <!-- UX: Control de Mercado (Necesario para el Omnicanal) -->
+    <div class="control-group fade-in" style="margin-top: 1.5rem;">
+      <label style="font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Mercado a Analizar</label>
+      <select [(ngModel)]="selectedCountry" class="form-input" style="width: 100%; margin-top: 0.5rem; padding: 0.6rem; border-radius: 0.5rem; border: 1px solid #cbd5e1; outline: none; cursor: pointer;">
         <option value="Colombia">🇨🇴 Colombia</option>
         <option value="México">🇲🇽 México</option>
       </select>
     </div>
 
-    <div class="control-group">
-      <label>2. Plataforma a Analizar</label>
-      <select [(ngModel)]="selectedNetwork" class="form-input">
-        <option value="facebook">Facebook (Páginas)</option>
-        <option value="instagram">Instagram (Perfiles)</option>
-        <option value="tiktok">TikTok (Perfiles)</option>
-        <option value="youtube">YouTube (Canales)</option>
-      </select>
-    </div>
-
-    <div class="control-group">
-      <label>3. Origen de Datos</label>
-      <div class="radio-group">
-        <label class="radio-label">
-          <input type="radio" name="actionType" value="get-latest" [(ngModel)]="actionType">
-          <span>Último Historial (Rápido)</span>
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="actionType" value="run" [(ngModel)]="actionType">
-          <span>Nueva Extracción (1-2 min)</span>
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="actionType" value="list-runs" [(ngModel)]="actionType">
-          <span>Ver Historial de Ejecuciones</span>
-        </label>
-      </div>
-    </div>
-
-    @if (actionType() === 'run') {
-      <div class="fade-in" style="display: flex; flex-direction: column; gap: 1.5rem;">
-        
-        <div class="control-group">
-          <label>4. URLs de los Competidores</label>
-          <textarea 
-            [(ngModel)]="targetUrlsInput" 
-            rows="4"
-            placeholder="Ingresa una URL por línea..." 
-            class="form-input"
-            style="resize: vertical;"></textarea>
-          <small class="help-text">Se procesarán en paralelo.</small>
-        </div>
-
-        <div class="control-group">
-          <label>5. Contenido a Extraer</label>
-          <select [(ngModel)]="scrapeType" class="form-input">
-            <option value="posts">Publicaciones (Posts)</option>
-            <option value="comments">Comentarios</option>
-            <option value="details">Detalles del Perfil</option>
-          </select>
-        </div>
-
-        <div class="control-group">
-          <label>6. Extraer posts después de (Opcional)</label>
-          <input type="date" [(ngModel)]="scrapeStartDate" class="form-input">
-          <small class="help-text">Apify extraerá todo desde esta fecha hasta hoy.</small>
-        </div>
-
-        <div class="control-group">
-          <label>7. Límite de Resultados por URL</label>
-          <input type="number" [(ngModel)]="resultsLimit" min="1" max="1000" class="form-input">
-        </div>
-      </div>
-    }
-
-    <button (click)="fetchData()" [disabled]="isLoading()" class="btn-primary btn-block" style="margin-top: 1.5rem;">
-      @if (isLoading()) {
-        <span class="spinner-small"></span> Procesando...
-      } @else if (actionType() === 'list-runs') {
-        <span>Cargar Historiales</span>
-      } @else {
-        <span>Ejecutar Consulta Individual</span>
-      }
-    </button>
-
-    <hr style="border: 0; border-top: 1px dashed #e5e7eb; margin: 1rem 0;">
-    <button (click)="fetchOmnichannelData()" [disabled]="isLoading()" class="btn-block" 
-            style="background-color: #111827; color: white; padding: 0.75rem 1rem; border-radius: 0.5rem; border: none; font-weight: 600; font-size: 0.875rem; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 0.5rem; transition: transform 0.1s ease;">
+    <!-- BOTÓN OMNICANAL -->
+    <button (click)="fetchOmnichannelData()" [disabled]="isLoading()" class="btn-block fade-in"
+            style="margin-top: 1rem; background-color: #0f172a; color: white; padding: 0.875rem 1rem; border-radius: 0.5rem; border: none; font-weight: 600; font-size: 0.875rem; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 0.5rem; transition: transform 0.1s ease, opacity 0.2s;">
       @if (isLoading()) {
         <span class="spinner-small"></span> Consolidando...
       } @else {
         <span>🌐 Visión Ecosistema (Omnicanal)</span>
       }
     </button>
-    <small class="help-text" style="text-align: center; display: block; margin-top: 0.5rem;">
-      Cruza el último historial de todas las plataformas para {{ selectedCountry() }}.
+    <small class="help-text fade-in" style="text-align: center; display: block; margin-top: 0.5rem; color: #64748b; font-size: 0.75rem;">
+      Cruza los historiales recientes de todas las plataformas para {{ selectedCountry() }}.
     </small>
+
+    <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 2rem 0 1.5rem 0;">
+
+    <!-- UX: Tarjeta informativa sobre el nuevo flujo automatizado -->
+    <div class="info-card fade-in" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 1.25rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+      <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: #0f172a; display: flex; align-items: center; gap: 0.5rem;">
+        <span>🤖</span> Automatización Activa
+      </h4>
+      <p style="font-size: 0.85rem; color: #475569; line-height: 1.5; margin: 0;">
+        Los datos estratégicos se actualizan automáticamente en segundo plano.
+        <br><br>
+        Selecciona un reporte en la tabla para análisis individual por red.
+      </p>
+    </div>
+
+    <button (click)="loadHistory()" [disabled]="isLoading()" class="btn-primary btn-block fade-in" style="margin-top: 1rem; display: flex; justify-content: center; align-items: center; gap: 0.5rem; font-weight: 600; padding: 0.875rem;">
+      @if (isLoading()) {
+        <span class="spinner-small"></span> Sincronizando Nube...
+      } @else {
+        <span>🔄 Sincronizar Historial</span>
+      }
+    </button>
   </aside>
 
   <!-- ÁREA PRINCIPAL (RESULTADOS) -->
   <main class="dashboard-content">
-    
+
     @if (error()) {
-      <div class="alert alert-error"><strong>⚠️ Error:</strong> {{ error() }}</div>
+      <div class="alert alert-error fade-in"><strong>⚠️ Error:</strong> {{ error() }}</div>
     }
 
     @if (isLoading()) {
-      <div class="loading-state">
+      <div class="loading-state fade-in">
         <div class="spinner"></div>
-        <p>Procesando inteligencia de mercado. Por favor espera...</p>
+        <p>Sincronizando inteligencia de mercado. Por favor espera...</p>
       </div>
     }
 
-    <!-- TABLA DE HISTORIALES -->
+    <!-- TABLA DE HISTORIALES (Punto de entrada principal) -->
     @if (!isLoading() && !error() && runsList().length > 0) {
-      <div class="results-header fade-in">
-        <h3>Historial de Ejecuciones</h3>
-        <p>Selecciona una ejecución previa para analizar los datos sin consumir créditos.</p>
+      <div class="results-header fade-in" style="margin-bottom: 1.5rem;">
+        <h3>Historial de Ejecuciones (Nube)</h3>
+        <p>Haz clic en el botón de la tabla para analizar una ejecución específica sin latencia ni consumo de créditos.</p>
       </div>
-      <app-apify-runs-table 
-        [runsList]="runsList()"
-        (runSelected)="loadSpecificRun($event.runId, $event.actorInternalId)">
-      </app-apify-runs-table>
+
+      <div class="fade-in">
+       <app-apify-runs-table [runsList]="runsList()" (runSelected)="loadSpecificRun($event.runId, $event.actorInternalId)" (countryChanged)="onRunCountryChanged($event)"></app-apify-runs-table>
+      </div>
     }
 
     <!-- ÁREA DE DASHBOARD Y GRÁFICAS -->
     @if (!isLoading() && !error() && data().length > 0) {
-      
-      <div class="results-header fade-in enterprise-header">
+
+      <div class="results-header fade-in enterprise-header" style="margin-top: 2rem;">
         <div>
           <h3 class="network-title">
             <span class="network-icon">
@@ -143,7 +92,7 @@
           </h3>
           <p class="subtitle">
             Se consolidaron <strong>{{ filteredData().length }} registros</strong>.
-            
+
             @if (loadedCountry()) {
               <span class="date-badge" style="margin-left: 0.5rem; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb;">
                 📍 Mercado: {{ loadedCountry() }}
@@ -152,7 +101,7 @@
 
             @if (dynamicDateRange()) {
               <span class="date-badge" style="margin-left: 0.5rem;">
-                🗓️ Temporalidad Actual: {{ dynamicDateRange() }}
+                🗓️ Temporalidad: {{ dynamicDateRange() }}
               </span>
             }
           </p>
@@ -161,32 +110,32 @@
 
       <!-- BARRA DE FILTRADO LOCAL (Fechas y Métricas Globales) -->
       <div class="local-filters-card fade-in" style="background: #ffffff; padding: 1.2rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);">
-        
+
         <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 0.75rem;">
             <div style="width: 32px; height: 32px; border-radius: 8px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #3b82f6;">
               📅
             </div>
-            <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #111827;">Segmentar Datos:</h4>
+            <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #111827;">Segmentar Fechas:</h4>
           </div>
-          
+
           <div style="display: flex; align-items: center; gap: 1rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem; background: #f9fafb; padding: 0.25rem 0.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb;">
               <label style="font-size: 0.8rem; font-weight: 600; color: #4b5563; margin: 0;">Desde:</label>
-              <input type="date" [ngModel]="filterStartDate()" (ngModelChange)="onStartDateChange($event)" 
+              <input type="date" [ngModel]="filterStartDate()" (ngModelChange)="onStartDateChange($event)"
                      style="border: none; background: transparent; font-size: 0.85rem; outline: none; cursor: pointer; color: #111827;">
             </div>
-            
+
             <span style="color: #9ca3af; font-weight: bold;">→</span>
-            
+
             <div style="display: flex; align-items: center; gap: 0.5rem; background: #f9fafb; padding: 0.25rem 0.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb;">
               <label style="font-size: 0.8rem; font-weight: 600; color: #4b5563; margin: 0;">Hasta:</label>
-              <input type="date" [ngModel]="filterEndDate()" (ngModelChange)="onEndDateChange($event)" 
+              <input type="date" [ngModel]="filterEndDate()" (ngModelChange)="onEndDateChange($event)"
                      style="border: none; background: transparent; font-size: 0.85rem; outline: none; cursor: pointer; color: #111827;">
             </div>
           </div>
         </div>
-        
+
         <div class="filters-panel" style="margin: 0; padding: 0; border: none; background: transparent; box-shadow: none;">
           <button class="filter-pill" [class.active]="selectedMetric() === 'total'" (click)="applyFilter('total')">📈 Total</button>
           <button class="filter-pill" [class.active]="selectedMetric() === 'views'" (click)="applyFilter('views')">👁️ Vistas</button>
@@ -194,10 +143,10 @@
           <button class="filter-pill" [class.active]="selectedMetric() === 'comments'" (click)="applyFilter('comments')">💬 Comentarios</button>
         </div>
       </div>
-      
+
       <!-- GRÁFICAS -->
       <div class="charts-grid fade-in">
-        
+
         @if (marketShareChartOptions()) {
           <div class="chart-card">
             <div echarts [options]="marketShareChartOptions()!" style="height: 100%; width: 100%;"></div>
@@ -206,7 +155,7 @@
 
         @if (competitorsKpi().length > 0) {
           <div class="chart-card kpi-container" style="display: flex; flex-direction: column; gap: 1rem; overflow-y: auto;">
-            
+
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.2rem; flex-wrap: wrap; gap: 0.5rem;">
               <div>
                 <h4 style="margin: 0; font-size: 1.1rem; color: #111827;">Comunidad de Marca</h4>
@@ -214,7 +163,7 @@
               </div>
               <div style="display: flex; align-items: center; gap: 0.4rem; background: #f9fafb; padding: 0.2rem 0.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb;">
                 <label style="font-size: 0.75rem; color: #4b5563; font-weight: 600; margin: 0;">Ordenar por:</label>
-                <select (change)="changeKpiSort($any($event.target).value)" 
+                <select (change)="changeKpiSort($any($event.target).value)"
                         style="border: none; background: transparent; font-size: 0.8rem; color: #111827; cursor: pointer; outline: none; font-weight: 500;">
                   <option value="followers">👥 Mayor Comunidad</option>
                   <option value="views">👁️ Más Vistas</option>
@@ -223,12 +172,12 @@
                 </select>
               </div>
             </div>
-            
+
             @for (comp of competitorsKpi(); track comp.name) {
               <div class="kpi-card" style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                
+
                 @if (comp.avatar) {
-                  <img #avatarImg [src]="comp.avatar" referrerpolicy="no-referrer" 
+                  <img #avatarImg [src]="comp.avatar" referrerpolicy="no-referrer"
                        (error)="avatarImg.style.display='none'; fallbackAvatar.style.display='flex'"
                        style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 1px solid #e5e7eb;" alt="Logo">
                   <div #fallbackAvatar style="display: none; width: 44px; height: 44px; border-radius: 50%; background: #e0e7ff; align-items: center; justify-content: center; font-size: 1.1rem; color: #4338ca; font-weight: bold;">
@@ -239,12 +188,12 @@
                     {{ comp.name.charAt(0) | uppercase }}
                   </div>
                 }
-                
+
                 <div style="flex: 1; overflow: hidden;">
                   <div style="font-weight: 700; color: #374151; font-size: 0.95rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ comp.name }}</div>
-                  
+
                   <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem;">
-                    
+
                     <span style="background: #eff6ff; color: #1d4ed8; padding: 0.15rem 0.4rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bfdbfe; white-space: nowrap;">
                       👥 {{ comp.followersStr }} {{ loadedNetwork() === 'youtube' ? 'Subs' : (loadedNetwork() === 'omnicanal' ? 'Comunidad' : 'Segs') }}
                     </span>
@@ -295,11 +244,11 @@
 
       <!-- CENTRO DE CONTROL DEL GRID CON LOGICA UX CONDICIONAL -->
       <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 2.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-        
+
         <h4 class="section-title fade-in" style="margin: 0; padding-bottom: 0; color: #111827; font-size: 1.25rem;">Desglose de Contenido</h4>
-        
+
         <div class="grid-controls fade-in" style="display: flex; align-items: center; gap: 1.5rem; background: linear-gradient(to right, #ffffff, #f8fafc); padding: 0.75rem 1.25rem; border-radius: 0.75rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-          
+
           <!-- FILTRO DE COMPETIDOR -->
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 1.2rem;">🏢</span>
@@ -317,7 +266,7 @@
           <!-- FILTRO DE PLATAFORMA (Condicional) -->
           @if (loadedNetwork() === 'omnicanal') {
             <div style="width: 1px; height: 24px; background: #cbd5e1;"></div>
-            
+
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span style="font-size: 1.2rem;">📱</span>
               <div style="display: flex; flex-direction: column;">
@@ -336,7 +285,7 @@
           <!-- FILTRO DE FORMATO DE CONTENIDO (Condicional Inteligente UX) -->
           @if (showContentTypeFilter()) {
             <div style="width: 1px; height: 24px; background: #cbd5e1;"></div>
-            
+
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span style="font-size: 1.2rem;">🎬</span>
               <div style="display: flex; flex-direction: column;">
@@ -378,10 +327,10 @@
 
     <!-- ESTADO VACÍO GLOBAL -->
     @if (!isLoading() && !error() && data().length === 0 && runsList().length === 0) {
-      <div class="empty-state fade-in">
-        <div class="empty-icon">📊</div>
+      <div class="empty-state fade-in" style="margin-top: 2rem;">
+        <div class="empty-icon" style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
         <h3>Centro de Inteligencia Competitiva</h3>
-        <p>Configura los parámetros en el panel lateral para generar el dashboard.</p>
+        <p style="color: #64748b;">El sistema cargará automáticamente los historiales recientes disponibles en tu cuenta.</p>
       </div>
     }
   </main>

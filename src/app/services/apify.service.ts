@@ -4,7 +4,8 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError, forkJoin, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 
-export type ApifyAction = 'run' | 'get-latest' | 'list-runs' | 'get-run-data';
+// NUEVO: Agregamos 'update-run' a los tipos de acción válidos
+export type ApifyAction = 'run' | 'get-latest' | 'list-runs' | 'get-run-data' | 'update-run';
 
 // Definición estricta de mercados soportados
 export type MarketCountry = 'Colombia' | 'México';
@@ -17,7 +18,6 @@ export interface ApifyRunRecord {
   usageTotalUsd: number;
   actorId: string;
   country?: MarketCountry;
-  // NUEVO: Propiedades para el rango de fechas de extracción
   inputStartDate?: string;
   inputEndDate?: string;
 }
@@ -28,7 +28,6 @@ export interface ApifyPayload {
   inputPayload?: Record<string, any>;
   runId?: string;
   country?: MarketCountry;
-  // NUEVO: Fechas opcionales para enviar a Supabase en nuevas extracciones
   startDate?: string;
   endDate?: string;
 }
@@ -67,6 +66,23 @@ export class ApifyService {
 
     console.error('[ApifyService Error]:', errorMessage);
     return throwError(() => new Error(errorMessage));
+  }
+
+  // ==========================================
+  // PERSISTENCIA DE DATOS (NUEVO)
+  // ==========================================
+
+  updateRunCountry(runId: string, newCountry: MarketCountry): Observable<ApifyResponse> {
+    const payload: ApifyPayload = {
+      action: 'update-run',
+      runId: runId,
+      country: newCountry
+    };
+
+    // Reutilizamos el endpoint de la Edge Function para mantener la arquitectura limpia
+    return this.http.post<ApifyResponse>(this.EDGE_FUNCTION_URL, payload).pipe(
+      catchError(this.handleError)
+    );
   }
 
   // ==========================================

@@ -1,62 +1,97 @@
 <!-- src/app/components/apify-runs-table/apify-runs-table.component.html -->
-<div class="table-container fade-in">
-  <table class="runs-table">
-
-    <thead>
-      <tr>
-        <!-- Se eliminó la columna Run ID por limpieza visual -->
-        <th>Mercado</th>
-        <th>Plataforma</th>
-        <th>Período Extraído</th> <!-- NUEVA COLUMNA: Rango de fechas de la data -->
-        <th>Estado</th>
-        <th>Fecha de Ejecución</th>
-        <th>Duración</th>
-        <th>Costo (USD)</th>
-      </tr>
-    </thead>
-
-    <tbody>
-      @for (run of runsList; track run.id) {
-        <tr class="clickable-row" (click)="onRowClick(run.id, run.actorId)">
-
-          <!-- UX: Mercado con texto limpio y tipografía destacada -->
-          <td class="cell-primary" style="font-weight: 600;">{{ run.country || 'Colombia' }}</td>
-
-          <td class="cell-primary">{{ getActorFriendlyName(run.actorId) }}</td>
-
-          <!-- UX: Columna dinámica para el rango de fechas de extracción -->
-          <td class="cell-secondary">
-            @if (run.inputStartDate && run.inputEndDate) {
-              {{ run.inputStartDate | date:'shortDate' }} - {{ run.inputEndDate | date:'shortDate' }}
-            } @else if (run.inputStartDate) {
-              Desde {{ run.inputStartDate | date:'shortDate' }}
-            } @else {
-              <span style="color: #9ca3af; font-style: italic; font-size: 0.85em;">Histórico Completo</span>
-            }
-          </td>
-
-          <td>
-            <span class="status-badge"
-                  [class.success]="run.status === 'SUCCEEDED'"
-                  [class.error]="run.status !== 'SUCCEEDED'">
-              {{ run.status }}
-            </span>
-          </td>
-
-          <td class="cell-secondary">{{ run.startedAt | date:'medium' }}</td>
-
-          <td class="cell-secondary font-mono">{{ calculateDuration(run.startedAt, run.finishedAt) }}</td>
-
-          <td class="cell-secondary">{{ run.usageTotalUsd | currency:'USD':'symbol':'1.3-3' }}</td>
+<div class="table-container fade-in" style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+  <div style="overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left; min-width: 900px;">
+      <thead style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+        <tr>
+          <th style="padding: 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Mercado</th>
+          <th style="padding: 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Plataforma</th>
+          <th style="padding: 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Período Extraído</th>
+          <th style="padding: 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Estado</th>
+          <th style="padding: 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Fecha de Ejecución</th>
+          <th style="padding: 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Duración</th>
+          <th style="padding: 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Costo (USD)</th>
         </tr>
-      }
-    </tbody>
+      </thead>
+      <tbody>
+        @for (run of runsList; track run.id) {
+          <tr
+            (click)="onSelectRun(run)"
+            style="border-bottom: 1px solid #f1f5f9; transition: background-color 0.2s ease; cursor: pointer;"
+            onmouseover="this.style.backgroundColor='#f8fafc'"
+            onmouseout="this.style.backgroundColor='transparent'">
 
-  </table>
+            <!-- UX REFACTOR: Mercado (Editable para Admin, Solo Lectura para otros) -->
+            <td style="padding: 0.75rem 1rem;">
+              @if (isAdmin) {
+                <!-- Vista de Administrador -->
+                <select
+                  [ngModel]="run.country || ''"
+                  (change)="onCountryChange(run.id, $event)"
+                  (click)="$event.stopPropagation()"
+                  title="Asigna el país al que pertenece esta extracción"
+                  style="padding: 0.4rem; border-radius: 0.375rem; border: 1px solid #cbd5e1; font-size: 0.85rem; font-weight: 600; color: #0f172a; outline: none; cursor: pointer; background-color: #ffffff; transition: border-color 0.2s;">
+                  <option value="" disabled selected>-- Asignar --</option>
+                  <option value="Colombia">🇨🇴 Colombia</option>
+                  <option value="México">🇲🇽 México</option>
+                </select>
+              } @else {
+                <!-- Vista de Usuario Normal (Solo Lectura) -->
+                <div style="display: flex; align-items: center;">
+                  @if (run.country === 'Colombia') {
+                    <span style="background: #f0fdf4; color: #166534; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.8rem; font-weight: 700; border: 1px solid #bbf7d0;">🇨🇴 Colombia</span>
+                  } @else if (run.country === 'México') {
+                    <span style="background: #fdf4ff; color: #86198f; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.8rem; font-weight: 700; border: 1px solid #fbcfe8;">🇲🇽 México</span>
+                  } @else {
+                    <span style="background: #f1f5f9; color: #64748b; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.8rem; font-weight: 700; border: 1px solid #e2e8f0;" title="Ejecución automática de Apify pendiente de clasificar">⚙️ Automático</span>
+                  }
+                </div>
+              }
+            </td>
+
+            <td style="padding: 1rem; font-size: 0.9rem; font-weight: 600; color: #1e293b;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.1rem;">
+                  {{ run.actorId.includes('youtube') ? '▶️' : run.actorId.includes('tiktok') ? '🎵' : run.actorId.includes('instagram') ? '📸' : '👍' }}
+                </span>
+                {{ getPlatformName(run.actorId) }}
+              </div>
+            </td>
+
+            <td style="padding: 1rem; font-size: 0.85rem; color: #64748b; font-style: italic;">
+              {{ run.inputStartDate ? (run.inputStartDate | date:'shortDate') : 'Histórico Completo' }}
+              {{ run.inputEndDate ? ' - ' + (run.inputEndDate | date:'shortDate') : '' }}
+            </td>
+
+            <td style="padding: 1rem;">
+              <span [style.background]="run.status === 'SUCCEEDED' ? '#dcfce7' : '#fee2e2'"
+                    [style.color]="run.status === 'SUCCEEDED' ? '#166534' : '#991b1b'"
+                    style="padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.5px;">
+                {{ run.status }}
+              </span>
+            </td>
+
+            <td style="padding: 1rem; font-size: 0.9rem; color: #475569;">
+              {{ run.startedAt | date:'medium' }}
+            </td>
+
+            <td style="padding: 1rem; font-size: 0.9rem; color: #475569;">
+              {{ getDuration(run.startedAt, run.finishedAt) }}
+            </td>
+
+            <td style="padding: 1rem; font-size: 0.9rem; font-weight: 600; color: #475569;">
+              ${{ run.usageTotalUsd | number:'1.3-3' }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
 
   @if (runsList.length === 0) {
-    <div class="empty-table-state">
-      <p>No se encontraron registros de ejecuciones.</p>
+    <div style="padding: 3rem; text-align: center; color: #64748b;">
+      <div style="font-size: 2.5rem; margin-bottom: 1rem;">📭</div>
+      <p style="margin: 0; font-size: 1rem; font-weight: 500;">No se encontraron ejecuciones recientes.</p>
     </div>
   }
 </div>
